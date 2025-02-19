@@ -2,7 +2,7 @@ import pygame
 import random
 import sys
 from player import Player
-from enemy import Enemy, FastEnemy, TankEnemy  # Import all enemy types
+from enemy import Enemy, FastEnemy, TankEnemy, DasherEnemy # Import all enemy types
 from obstacle import generate_town_layout
 from leaderboard import save_leaderboard
 
@@ -14,7 +14,7 @@ FONT = pygame.font.Font(None, 36)
 
 WAVE_DURATION = 30000  # 30 seconds per wave
 DOWN_TIME = 5000  # 5 seconds between waves
-INITIAL_SPAWN_INTERVAL = 2000  # Enemies start spawning every 2 seconds
+INITIAL_SPAWN_INTERVAL = 1000  # Enemies start spawning every 2 seconds
 
 
 class Game:
@@ -29,6 +29,7 @@ class Game:
         self.last_enemy_spawn_time = pygame.time.get_ticks()
         self.spawn_interval = INITIAL_SPAWN_INTERVAL
         self.enemy_types = [Enemy]  # Start with only basic enemies
+        self.death_animations = []  # Store active death animations
 
         # Create player
         self.player = Player(MAP_WIDTH // 2, MAP_HEIGHT // 2, MAP_WIDTH, MAP_HEIGHT)
@@ -40,21 +41,20 @@ class Game:
         self.enemies = []
 
     def spawn_enemy(self):
-        """Spawns enemies with the correct HP values and ensures weights match available enemy types."""
-
-        # Dynamically set enemy weights to match available enemy types
-        enemy_weights = [3]  # Start with normal enemies being most common
+        """Spawns enemies dynamically, including dashers after a certain wave."""
+        enemy_weights = [3]  # Default: Normal enemies are common
 
         if FastEnemy in self.enemy_types:
-            enemy_weights.append(2)  # Fast enemies become available at Wave 5
+            enemy_weights.append(2)  # Fast enemies available at Wave 5
         if TankEnemy in self.enemy_types:
-            enemy_weights.append(1)  # Tank enemies become available at Wave 10
+            enemy_weights.append(1)  # Tank enemies available at Wave 10
+        if DasherEnemy in self.enemy_types:
+            enemy_weights.append(2)  # Dashers are moderately common
 
-        # Ensure weights match the number of enemy types
+        # Ensure enemy type selection remains valid
         if len(enemy_weights) != len(self.enemy_types):
             raise ValueError("Enemy weights do not match the available enemy types!")
 
-        # Pick an enemy type with correct weights
         enemy_class = random.choices(self.enemy_types, weights=enemy_weights, k=1)[0]
 
         x, y = random.choice([
@@ -64,15 +64,16 @@ class Game:
             (MAP_WIDTH, random.randint(0, MAP_HEIGHT))  # Right edge
         ])
 
-        # Manually assign HP values to each enemy type
         if enemy_class == Enemy:
-            new_enemy = Enemy(x, y, 2)  # Red Guy (Normal) has 2 HP
+            new_enemy = Enemy(x, y, 2)  # Normal enemies
         elif enemy_class == FastEnemy:
-            new_enemy = FastEnemy(x, y)  # Yellow Guy (Fast) has 1 HP
+            new_enemy = FastEnemy(x, y)  # Fast enemies
         elif enemy_class == TankEnemy:
-            new_enemy = TankEnemy(x, y)  # Blue Guy (Tank) has 5 HP
+            new_enemy = TankEnemy(x, y)  # Tank enemies
+        elif enemy_class == DasherEnemy:
+            new_enemy = DasherEnemy(x, y)  # Dasher enemies
 
-        self.enemies.append(new_enemy)  # Ensure instance is added
+        self.enemies.append(new_enemy)
 
     def new_wave(self):
         """Increases difficulty each wave, slowing the spawn acceleration over time."""
@@ -92,6 +93,9 @@ class Game:
         elif self.wave == 10 and TankEnemy not in self.enemy_types:
             self.enemy_types.append(TankEnemy)
             print("Tank enemies introduced!")
+        elif self.wave == 15 and DasherEnemy not in self.enemy_types:
+            self.enemy_types.append(DasherEnemy)
+            print("Dashers introduced!")
 
     def run(self):
         """Main game loop."""
@@ -145,30 +149,32 @@ class Game:
             for enemy in self.enemies[:]:
                 enemy.update(self.player, self.obstacles)
 
-            # Update and handle bullets
-            bullets_to_remove = []
-            for bullet in self.player.bullets[:]:
+            for bullet in self.player.bullets[:]:  # Iterate over a copy to avoid modification issues
                 bullet.update(self.obstacles, self.enemies, self)
 
-                if bullet not in self.player.bullets:
-                    continue  # Bullet already removed
-
-                # Check for bullet collision with obstacles
-                if any(obstacle.collides(bullet.rect) for obstacle in self.obstacles):
-                    bullets_to_remove.append(bullet)
-
-                # Check for bullet collision with enemies
-                for enemy in self.enemies[:]:
-                    if bullet.rect.colliderect(enemy.rect):
-                        enemy_died = enemy.take_damage()  # Reduce HP
-
-                        if enemy_died:  # Only remove if HP is zero
-                            print(f"Enemy at {enemy.rect.topleft} died!")  # Debugging
-                            self.enemies.remove(enemy)
-
-                        self.score += 50
+            # Update and handle bullets
+            bullets_to_remove = []
+            for bullet in self.player.bullets[:]:  # Iterate over a copy to safely remove bullets
+                if bullet.rect is None:
+                    continue  # Skip bullets that were already removed
+                for enemy in self.enemies:
+                    if enemy.rect is not None and bullet.rect.colliderect(enemy.rect):
+                        enemy_died = enemy.take_damage()
                         self.player.bullets.remove(bullet)
-                        break  # Stop checking after one hit
+
+                        if enemy_died:
+                            self.enemies.remove(enemy)
+                            self.score += 50  # Default score for normal enemies
+
+                            # Score scaling for different enemies
+                            if isinstance(enemy, FastEnemy):
+                                self.score += 75
+                            elif isinstance(enemy, TankEnemy):
+                                self.score += 200
+
+                            print(f"Enemy at {enemy.rect.topleft} died! Score: {self.score}")
+
+                        break  # Exit loop after bullet hits something
 
             # Remove bullets after iteration to prevent modifying the list while looping
             for bullet in bullets_to_remove:
@@ -181,14 +187,19 @@ class Game:
                     self.enemies.remove(enemy)
 
             # Check if player collides with enemies (take damage)
-            for enemy in self.enemies[:]:
-                if enemy.rect.colliderect(self.player.rect):
+            for enemy in self.enemies:
+                if enemy.rect is not None and enemy.rect.colliderect(self.player.rect):
                     self.player.take_damage()
                     self.enemies.remove(enemy)
 
             # Check if player dies
             if self.player.health <= 0:
                 self.end_game()
+
+            # Death animation for enemies
+            for animation in self.death_animations[:]:  # Iterate over a copy for safe removal
+                if animation.update():
+                    self.death_animations.remove(animation)
 
             # Draw everything with camera offset
             self.player.draw(self.screen, camera_x, camera_y)
@@ -198,6 +209,10 @@ class Game:
                 enemy.draw(self.screen, camera_x, camera_y)
             for obstacle in self.obstacles:
                 obstacle.draw(self.screen, camera_x, camera_y)
+
+            # Draw death animations
+            for animation in self.death_animations:
+                animation.draw(self.screen, camera_x, camera_y)
 
             # Draw UI (Wave, Score, and Player Health)
             wave_text = FONT.render(f"Wave: {self.wave}", True, WHITE)

@@ -39,9 +39,9 @@ class Obstacle:
             # Debug outline: exact same rectangle
             pygame.draw.rect(
                 screen,
-                (255, 0, 0),
+                (102, 51, 0),
                 pygame.Rect(draw_x, draw_y, self.width, self.height),
-                2
+                10
             )
         elif self.shape == "circle":
             # Draw the filled circle
@@ -62,11 +62,22 @@ class Obstacle:
 
     def collides(self, obj_rect):
         """Checks collision based on shape type."""
+        if obj_rect is None:
+            return False  # Avoid errors when checking dead enemies
+
         if self.shape in ["square", "rectangle"]:
-            # Inflate the rectangle slightly to ensure proper collision on all sides
-            inflated_rect = self.rect.inflate(-1, -1)  # Shrink slightly to remove gaps
-            result = inflated_rect.colliderect(obj_rect)
-            return result
+            inflated_rect = self.rect.inflate(-1, -1)  # Keep a slight buffer
+            return inflated_rect.colliderect(obj_rect)
+
+        elif self.shape == "circle":
+            circle_x = self.rect.x + self.radius
+            circle_y = self.rect.y + self.radius
+            closest_x = max(obj_rect.left, min(circle_x, obj_rect.right))
+            closest_y = max(obj_rect.top, min(circle_y, obj_rect.bottom))
+
+            distance = math.sqrt((circle_x - closest_x) ** 2 + (circle_y - closest_y) ** 2)
+            return distance <= self.radius
+
 
         elif self.shape == "circle":
             # Get actual center of the circle

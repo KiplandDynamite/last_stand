@@ -1,7 +1,6 @@
 import pygame
 import math
-from enemy import Enemy, FastEnemy, TankEnemy
-
+from enemy import Enemy, FastEnemy, TankEnemy, DeathAnimation
 
 BULLET_SPEED = 10
 BORDER_THICKNESS = 10  # Matches the border thickness
@@ -16,41 +15,46 @@ class Bullet:
 
     def update(self, obstacles, enemies, game):
         """Moves bullet and checks for collisions"""
+
         self.rect.x += self.speed_x
         self.rect.y += self.speed_y
 
         # Check if bullet hits the border and remove it
         if (self.rect.x <= 0 or self.rect.x >= self.MAP_WIDTH or
                 self.rect.y <= 0 or self.rect.y >= self.MAP_HEIGHT):
-            game.player.bullets.remove(self)
+            if self in game.player.bullets:
+                game.player.bullets.remove(self)
             return
 
         # Check collision with obstacles
         for obstacle in obstacles:
             if self.rect.colliderect(obstacle.rect):
-                game.player.bullets.remove(self)
+                if self in game.player.bullets:
+                    game.player.bullets.remove(self)
                 return
 
         # Check collision with enemies
         for enemy in enemies:
-            if self.rect.colliderect(enemy.rect):
-                enemy_died = enemy.take_damage()
 
-                if enemy_died:  # Enemy is dead, remove it and add score
-                    enemies.remove(enemy)
+            if enemy.rect is not None and self.rect.colliderect(enemy.rect):
 
-                    # **Assign different scores based on enemy type**
-                    if isinstance(enemy, FastEnemy):  # Yellow guy
+                enemy_died = enemy.take_damage()  # Check if enemy is dead
+
+                if self in game.player.bullets:
+                    game.player.bullets.remove(self)  # Remove bullet on hit
+
+                if enemy_died:
+                    game.death_animations.append(DeathAnimation(enemy.rect.x, enemy.rect.y, enemy.rect.width))
+                    enemies.remove(enemy)  # Remove enemy immediately
+                    game.score += 50  # Default score for normal enemies
+
+                    # Score scaling for different enemies
+                    if isinstance(enemy, FastEnemy):
                         game.score += 75
-                    elif isinstance(enemy, TankEnemy):  # Blue guy
+                    elif isinstance(enemy, TankEnemy):
                         game.score += 200
-                    else:  # Normal Red guy
-                        game.score += 50
 
-                    print(f"Enemy at {enemy.rect.topleft} died! Score: {game.score}")  # Debugging
-
-                game.player.bullets.remove(self)
-                return
+                    print(f"Updated Score: {game.score}")  # Debugging
 
     def draw(self, screen, camera_x, camera_y):
         """Draws the bullet, accounting for camera offset"""
