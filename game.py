@@ -2,7 +2,7 @@ import pygame
 import random
 import sys
 from player import Player
-from enemy import Enemy, FastEnemy, TankEnemy, DasherEnemy # Import all enemy types
+from enemy import Enemy, FastEnemy, TankEnemy, DasherEnemy, ShooterEnemy  # Import all enemy types
 from obstacle import generate_town_layout
 from leaderboard import save_leaderboard
 
@@ -22,14 +22,16 @@ class Game:
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         self.clock = pygame.time.Clock()
         self.running = True
+        self.paused_for_upgrade = False  # ⬅️ Add this flag to pause the game
         self.start_time = pygame.time.get_ticks()
         self.wave_start_time = self.start_time
         self.wave = 1
         self.score = 0
         self.last_enemy_spawn_time = pygame.time.get_ticks()
         self.spawn_interval = INITIAL_SPAWN_INTERVAL
-        self.enemy_types = [Enemy]  # Start with only basic enemies
+        self.enemy_types = [Enemy, FastEnemy, TankEnemy, DasherEnemy, ShooterEnemy]  # Start with only basic enemies
         self.death_animations = []  # Store active death animations
+        self.enemy_bullets = [] # Store bullets fired by shooter enemies
 
         # Create player
         self.player = Player(MAP_WIDTH // 2, MAP_HEIGHT // 2, MAP_WIDTH, MAP_HEIGHT)
@@ -50,6 +52,8 @@ class Game:
             enemy_weights.append(1)  # Tank enemies available at Wave 10
         if DasherEnemy in self.enemy_types:
             enemy_weights.append(2)  # Dashers are moderately common
+        if ShooterEnemy in self.enemy_types:
+            enemy_weights.append(2) # Shooters are moderately common
 
         # Ensure enemy type selection remains valid
         if len(enemy_weights) != len(self.enemy_types):
@@ -72,6 +76,8 @@ class Game:
             new_enemy = TankEnemy(x, y)  # Tank enemies
         elif enemy_class == DasherEnemy:
             new_enemy = DasherEnemy(x, y)  # Dasher enemies
+        elif enemy_class == ShooterEnemy:
+            new_enemy = ShooterEnemy(x, y) # Shooter enemies
 
         self.enemies.append(new_enemy)
 
@@ -96,6 +102,9 @@ class Game:
         elif self.wave == 15 and DasherEnemy not in self.enemy_types:
             self.enemy_types.append(DasherEnemy)
             print("Dashers introduced!")
+        elif self.wave >= 20 and ShooterEnemy not in self.enemy_types:
+            self.enemy_types.append(ShooterEnemy)
+            print("Shooter enemies introduced!")
 
     def run(self):
         """Main game loop."""
@@ -103,6 +112,18 @@ class Game:
             self.screen.fill((30, 30, 30))
             current_time = pygame.time.get_ticks()
             elapsed_wave_time = current_time - self.wave_start_time
+
+            # If waiting for an upgrade selection, only process input
+            if self.paused_for_upgrade:
+                self.handle_upgrade_input()
+                self.draw_upgrade_screen()  # ✅ Fix: Now draws the upgrade UI
+                self.clock.tick(60)
+                continue
+
+            current_time = pygame.time.get_ticks()
+            elapsed_wave_time = current_time - self.wave_start_time
+
+            # Normal game logic runs only if NOT paused
 
             # Camera follows player
             camera_x = self.player.rect.centerx - WIDTH // 2
@@ -128,10 +149,21 @@ class Game:
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    if event.button == 1:  # Left click to shoot
-                        mouse_x, mouse_y = pygame.mouse.get_pos()
-                        self.player.shoot(mouse_x + camera_x, mouse_y + camera_y)
+
+                if self.paused_for_upgrade:
+                    self.handle_upgrade_input()
+                    self.draw_upgrade_screen()
+                    self.clock.tick(60)
+                    continue
+
+                if self.paused_for_upgrade and event.type == pygame.KEYDOWN:
+                    self.player.handle_level_up_input(event.key, self)  # Let player pick an upgrade
+
+                if not self.paused_for_upgrade:  # Only process other inputs if game is not paused
+                    if event.type == pygame.MOUSEBUTTONDOWN:
+                        if event.button == 1:  # Left click to shoot
+                            mouse_x, mouse_y = pygame.mouse.get_pos()
+                            self.player.shoot(mouse_x + camera_x, mouse_y + camera_y)
 
             # Wave system
             if elapsed_wave_time >= WAVE_DURATION:
@@ -147,7 +179,10 @@ class Game:
 
             # Update enemy movement
             for enemy in self.enemies[:]:
-                enemy.update(self.player, self.obstacles)
+                if isinstance(enemy, ShooterEnemy):
+                    enemy.update(self.player, self.obstacles, self.enemy_bullets)  # Pass bullets list
+                else:
+                    enemy.update(self.player, self.obstacles)  # Normal enemies don't need bullets
 
             for bullet in self.player.bullets[:]:  # Iterate over a copy to avoid modification issues
                 bullet.update(self.obstacles, self.enemies, self)
@@ -174,6 +209,9 @@ class Game:
 
                             print(f"Enemy at {enemy.rect.topleft} died! Score: {self.score}")
 
+                            # ⬇️ FIX: Grant XP and pass `self` (Game instance)
+                            self.player.gain_xp(25, self)
+
                         break  # Exit loop after bullet hits something
 
             # Remove bullets after iteration to prevent modifying the list while looping
@@ -185,6 +223,14 @@ class Game:
             for enemy in self.enemies[:]:
                 if any(obstacle.collides(enemy.rect) for obstacle in self.obstacles):
                     self.enemies.remove(enemy)
+
+            # Update enemy bullets (ShooterBullets)
+            for bullet in self.enemy_bullets[:]:  # Iterate over a copy to safely remove bullets
+                bullet.update(self.player, self.obstacles, self.enemy_bullets)
+
+            # Draw enemy bullets
+            for bullet in self.enemy_bullets:
+                bullet.draw(self.screen, camera_x, camera_y)
 
             # Check if player collides with enemies (take damage)
             for enemy in self.enemies:
@@ -214,6 +260,9 @@ class Game:
             for animation in self.death_animations:
                 animation.draw(self.screen, camera_x, camera_y)
 
+            # Fire extra bullets
+            self.player.update_bullets()
+
             # Draw UI (Wave, Score, and Player Health)
             wave_text = FONT.render(f"Wave: {self.wave}", True, WHITE)
             score_text = FONT.render(f"Score: {self.score}", True, WHITE)
@@ -225,6 +274,28 @@ class Game:
 
             pygame.display.flip()
             self.clock.tick(60)
+
+    def handle_upgrade_input(self):
+        """Handles player input for selecting an upgrade."""
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN:
+                self.player.handle_level_up_input(event.key, self)
+
+    def draw_upgrade_screen(self):
+        """Displays the upgrade selection screen centered on the screen."""
+        self.screen.fill((0, 0, 0))  # Black background
+
+        title_text = FONT.render("LEVEL UP! Choose an Upgrade:", True, WHITE)
+        title_rect = title_text.get_rect(center=(WIDTH // 2, 150))  # Center title
+        self.screen.blit(title_text, title_rect)
+
+        if self.player.pending_ability_choices:
+            for i, ability in enumerate(self.player.pending_ability_choices, 1):
+                text = FONT.render(f"{i}: {ability['name']} - {ability['description']}", True, WHITE)
+                text_rect = text.get_rect(center=(WIDTH // 2, 200 + i * 50))  # Center each option
+                self.screen.blit(text, text_rect)
+
+        pygame.display.flip()  # Update the screen
 
     def end_game(self):
         """Ends the game and prompts for leaderboard entry."""

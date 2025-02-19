@@ -1,4 +1,5 @@
 KippyD,17,32850
+KippyD,12,23700
 Jonathan Jacobo,10,20325
 Walter Mitty,10,14400
 KippyD,9,14000
@@ -6,5 +7,4 @@ Alfred,9,11900
 House MD,14,10400
 Arthur,11,8675
 Fred Figglehorn,12,8200
-Taban,7,6950
-Blue Guy Weak,10,6850
+,5,6975
