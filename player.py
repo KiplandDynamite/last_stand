@@ -19,12 +19,23 @@ class Player:
         self.xp_to_next_level = 100  # Starting XP threshold
         self.pending_ability_choices = []
         self.abilities = []  # Holds selected abilities
-        self.speed = 5
+        self.base_speed = 5
+        self.speed = self.base_speed
+
+        self.move_speed_bonus = 0
+
+        self.adrenaline_boost = 0.00  # ✅ Starts at 0%, increases with Adrenaline Rush upgrades
+        self.adrenaline_active = False  # ✅ Whether Adrenaline Rush is active
+        self.adrenaline_end_time = 0
 
         self.bonus_bullets = 0  # ✅ Track extra bullets
-        self.pierce = 0  # ✅ Track number of pierces
         self.queued_shots = []  # ✅ Store bullets with delay
         self.shot_delay = 120  # ✅ Delay between extra bullets (in milliseconds)
+        self.pierce = 0  # ✅ Track number of pierces
+        self.fire_rate_multiplier = 1.0  # ✅ Default is 1.0 (no boost)
+        self.last_shot_time = 0  # ✅ Tracks when the last shot was fired
+
+        self.ricochet_count = 0
 
         # Hit effect tracking
         self.hit_timer = 0  # Time when player was last hit
@@ -55,25 +66,47 @@ class Player:
         self.rect.x = max(BORDER_THICKNESS, min(self.rect.x, self.MAP_WIDTH - self.rect.width - BORDER_THICKNESS))
         self.rect.y = max(BORDER_THICKNESS, min(self.rect.y, self.MAP_HEIGHT - self.rect.height - BORDER_THICKNESS))
 
+        current_time = pygame.time.get_ticks()
+
+        # ✅ Always apply Speed Boost permanently
+        self.speed = self.base_speed * (1 + self.move_speed_bonus)
+
+        # ✅ Apply temporary Adrenaline Rush bonus if active
+        if self.adrenaline_active:
+            self.speed *= (1 + self.adrenaline_boost)  # ✅ Dynamically modify speed while active
+
+        # ✅ Reset speed properly when Adrenaline Rush expires
+        if self.adrenaline_active and current_time > self.adrenaline_end_time:
+            self.adrenaline_active = False  # End Adrenaline Rush
+            self.speed = self.base_speed * (1 + self.move_speed_bonus)  # ✅ Reset speed correctly
+
         # ✅ Secret Dev Command: Instant Level Up
         if keys[pygame.K_l]:
             print("🛠 DEV COMMAND: Instant Level Up Activated!")
             self.force_level_up(game)  # ✅ Calls a dedicated function to handle dev level-up
 
     def shoot(self, mouse_x, mouse_y):
-        """Shoots bullets with a delay for extra shots while keeping smooth gameplay."""
-        angle = math.atan2(mouse_y - self.rect.centery, mouse_x - self.rect.centerx)
+        """Shoots bullets, reducing delay with Rapid Fire stacks."""
         current_time = pygame.time.get_ticks()
+        fire_delay = int(300 / self.fire_rate_multiplier)  # ✅ Adjust delay based on fire rate
 
-        # Fire the first bullet instantly
-        bullet = Bullet(self.rect.centerx, self.rect.centery, angle, self.MAP_WIDTH, self.MAP_HEIGHT, self.pierce)
-        bullet.fire()  # ✅ Ensure instant bullets are fired
+        if current_time - self.last_shot_time < fire_delay:
+            return  # ⛔ Prevents shooting if delay hasn't passed
+
+        self.last_shot_time = current_time  # ✅ Update last shot time
+
+        # Calculate bullet direction
+        angle = math.atan2(mouse_y - self.rect.centery, mouse_x - self.rect.centerx)
+
+        # Fire primary bullet
+        bullet = Bullet(self.rect.centerx, self.rect.centery, angle, self.MAP_WIDTH, self.MAP_HEIGHT, self.pierce,0, self.ricochet_count)
+        bullet.fire()
         self.bullets.append(bullet)
 
         # Queue additional bullets with delay
         for i in range(self.bonus_bullets):
-            delay_time = current_time + ((i + 1) * 50)  # ✅ Slightly increase delay for visibility
-            self.queued_shots.append((delay_time, angle))  # ✅ Store correctly
+            delay_time = current_time + ((i + 1) * 50)  # ✅ Adjusted to match new fire rate scaling
+            self.queued_shots.append((delay_time, angle))
 
     def update_bullets(self):
         """Processes queued bullets and fires them when the delay is reached."""
@@ -85,7 +118,7 @@ class Player:
             if current_time >= shot_time:
                 # ✅ Create and immediately fire the extra bullet
                 bullet = Bullet(self.rect.centerx, self.rect.centery, angle, self.MAP_WIDTH, self.MAP_HEIGHT,
-                                self.pierce)
+                                self.pierce, self.ricochet_count)
                 bullet.fire()  # ✅ Ensure bullet is set to active
                 self.bullets.append(bullet)
                 shots_to_fire.append(shot)  # ✅ Mark this shot for removal
@@ -131,10 +164,17 @@ class Player:
         screen.blit(player_surface, (self.rect.x - camera_x, self.rect.y - camera_y))
 
     def gain_xp(self, amount, game):
-        """Increase XP and check for level-up."""
+        """Increase XP and check for level-up. Also triggers Adrenaline Rush on kill."""
         self.xp += amount
         if self.xp >= self.xp_to_next_level:
             self.level_up(game)
+
+        # ✅ If Adrenaline Rush is unlocked, activate it
+        if "Adrenaline Rush" in [ability["name"] for ability in self.abilities]:
+            if not self.adrenaline_active:
+                self.adrenaline_active = True
+                self.adrenaline_end_time = pygame.time.get_ticks() + 5000  # ✅ Refresh 5s timer
+                print("🟢 Adrenaline Rush ACTIVATED!")
 
     def level_up(self, game):
         """Handles level-up logic and presents upgrade choices."""

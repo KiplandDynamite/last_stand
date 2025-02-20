@@ -7,7 +7,7 @@ BORDER_THICKNESS = 10  # Matches the border thickness
 TRAVEL_DISTANCE_AFTER_HIT = 5
 
 class Bullet:
-    def __init__(self, x, y, angle, map_width, map_height, pierce=0, delay=0):
+    def __init__(self, x, y, angle, map_width, map_height, pierce=0, delay=0, ricochet_count=0):
         """Initializes a bullet with movement, piercing ability, and a fire delay."""
         self.rect = pygame.Rect(x, y, 10, 10)
         self.speed_x = BULLET_SPEED * math.cos(angle)
@@ -18,6 +18,8 @@ class Bullet:
         self.damage = 1  # ✅ Piercing hits multiple enemies
         self.fired = False  # ✅ Prevents bullets from moving before firing
         self.fire_time = pygame.time.get_ticks() + delay  # ✅ Sets fire time
+        self.ricochet_count = ricochet_count
+        self.active = True
 
     def fire(self):
         """Activates bullet movement."""
@@ -35,6 +37,28 @@ class Bullet:
         self.rect.x += self.speed_x
         self.rect.y += self.speed_y
 
+        # ✅ Handle Ricochets Before Destroying Bullet
+        # ✅ Detect wall collision (TOP & BOTTOM) → Flip `speed_y`, keep `speed_x`
+        if self.rect.top <= 0 or self.rect.bottom >= self.MAP_HEIGHT:
+            if self.ricochet_count > 0:
+                self.ricochet_count -= 1
+                self.speed_y = -self.speed_y  # ✅ Flip only the vertical component
+                self.rect.y += self.speed_y  # ✅ Prevents sticking
+            else:
+                if self in game.player.bullets:
+                    game.player.bullets.remove(self)
+                return  # ✅ Ensure it doesn't continue after being removed
+
+        # ✅ Detect wall collision (LEFT & RIGHT) → Flip `speed_x`, keep `speed_y`
+        if self.rect.left <= 0 or self.rect.right >= self.MAP_WIDTH:
+            if self.ricochet_count > 0:
+                self.ricochet_count -= 1
+                self.speed_x = -self.speed_x  # ✅ Flip only the horizontal component
+                self.rect.x += self.speed_x  # ✅ Prevents sticking
+            else:
+                if self in game.player.bullets:
+                    game.player.bullets.remove(self)
+                return
 
         # Remove bullet if it leaves the map boundaries
         if not (0 <= self.rect.x <= self.MAP_WIDTH and 0 <= self.rect.y <= self.MAP_HEIGHT):
@@ -42,12 +66,32 @@ class Bullet:
                 game.player.bullets.remove(self)
             return
 
-        # Check for collision with obstacles
         for obstacle in obstacles:
             if self.rect.colliderect(obstacle.rect):
-                if self in game.player.bullets:
-                    game.player.bullets.remove(self)
-                return
+                if self.ricochet_count > 0:
+
+                    self.ricochet_count -= 1  # ✅ Reduce count BEFORE changing speed
+
+                    # ✅ Get the overlap to determine if the bullet hit horizontally or vertically
+                    overlap_x = min(abs(self.rect.right - obstacle.rect.left),
+                                    abs(self.rect.left - obstacle.rect.right))
+                    overlap_y = min(abs(self.rect.bottom - obstacle.rect.top),
+                                    abs(self.rect.top - obstacle.rect.bottom))
+
+                    if overlap_x < overlap_y:  # ✅ If the horizontal overlap is smaller → Bounce horizontally
+                        self.speed_x = -self.speed_x
+                        self.rect.x += self.speed_x * 3  # ✅ Push bullet away from obstacle
+                    else:  # ✅ Otherwise, bounce vertically
+                        self.speed_y = -self.speed_y
+                        self.rect.y += self.speed_y * 3  # ✅ Push bullet away from obstacle
+
+
+                    # ✅ Ensure bullet doesn’t collide again this frame
+                    break
+                else:
+                    if self in game.player.bullets:
+                        game.player.bullets.remove(self)
+                    return
 
         # Track enemies hit (to prevent multiple hits in one update cycle)
         enemies_hit = []

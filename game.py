@@ -14,7 +14,7 @@ FONT = pygame.font.Font(None, 36)
 
 WAVE_DURATION = 30000  # 30 seconds per wave
 DOWN_TIME = 5000  # 5 seconds between waves
-INITIAL_SPAWN_INTERVAL = 1500  # Enemies start spawning every 1.5 seconds
+INITIAL_SPAWN_INTERVAL = 2000  # Enemies start spawning every 2 seconds
 
 # XP Bar Settings
 XP_BAR_WIDTH = WIDTH // 2
@@ -34,7 +34,7 @@ class Game:
         self.score = 0
         self.last_enemy_spawn_time = pygame.time.get_ticks()
         self.spawn_interval = INITIAL_SPAWN_INTERVAL
-        self.enemy_types = [Enemy]  # Start with only basic enemies
+        self.enemy_types = [Enemy, ShooterEnemy]  # Start with only basic enemies
         self.death_animations = []  # Store active death animations
         self.enemy_bullets = [] # Store bullets fired by shooter enemies
 
@@ -74,7 +74,7 @@ class Game:
         ])
 
         if enemy_class == Enemy:
-            new_enemy = Enemy(x, y, 5)  # Normal enemies
+            new_enemy = Enemy(x, y, 3)  # Normal enemies
         elif enemy_class == FastEnemy:
             new_enemy = FastEnemy(x, y)  # Fast enemies
         elif enemy_class == TankEnemy:

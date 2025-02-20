@@ -98,7 +98,7 @@ class Enemy:
 class FastEnemy(Enemy):
     """Smaller, faster enemy with 1 HP."""
     def __init__(self, x, y):
-        super().__init__(x, y, 2)  # Fast enemies have 1 HP
+        super().__init__(x, y, 2)  # Fast enemies have 2 HP
         self.rect = pygame.Rect(x, y, 30, 30)  # Smaller size
         self.speed = ENEMY_SPEED * 1.8  # Faster speed
 
@@ -129,7 +129,7 @@ class FastEnemy(Enemy):
 class TankEnemy(Enemy):
     """Bigger, slower enemy with 5 HP."""
     def __init__(self, x, y):
-        super().__init__(x, y, 12)  # Tank enemies have 5 HP
+        super().__init__(x, y, 8)  # Tank enemies have 8 HP
         self.rect = pygame.Rect(x, y, 50, 50)  # Bigger size
         self.speed = ENEMY_SPEED * 0.75  # Slower movement
 
@@ -158,7 +158,7 @@ class TankEnemy(Enemy):
 class DasherEnemy(Enemy):
     """Enemy that dashes when close to the player."""
     def __init__(self, x, y):
-        super().__init__(x, y, 5)  # 5 HP
+        super().__init__(x, y, 4)  # 4 HP
         self.rect = pygame.Rect(x, y, 35, 35)  # Slightly smaller hitbox
         self.base_speed = ENEMY_SPEED * 1  # Normal movement speed
         self.dash_speed = ENEMY_SPEED * 25  # Much faster dash speed
@@ -244,15 +244,10 @@ class DasherEnemy(Enemy):
 
         self.draw_health_bar(screen, camera_x, camera_y, enemy_color)
 
-
-import pygame
-import math
-from enemy import Enemy
-
 class ShooterEnemy(Enemy):
     """An enemy that moves into range, stops, and shoots bullets at the player."""
     def __init__(self, x, y):
-        super().__init__(x, y, 5)  # 5 HP
+        super().__init__(x, y, 4)  # 4 HP
         self.rect = pygame.Rect(x, y, 35, 35)  # Slightly smaller than normal enemies
         self.attack_range = 300  # Stops moving when within 300 pixels of player
         self.shoot_cooldown = 2000  # Fires every 2 seconds
@@ -353,7 +348,6 @@ class DeathAnimation:
         self.start_time = pygame.time.get_ticks()  # Track when animation starts
         self.duration = duration  # How long the effect lasts in ms
         self.alpha = 255  # Opacity for fade effect
-        print(f"Death animation created at {x}, {y}")  # Debugging
 
     def update(self):
         """Updates the animation effect (e.g., fading out)."""
