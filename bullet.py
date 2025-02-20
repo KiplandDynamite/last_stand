@@ -1,13 +1,16 @@
 import pygame
 import math
-from enemy import Enemy, FastEnemy, TankEnemy, DasherEnemy, ShooterEnemy, DeathAnimation
+import random
+from enemy import Enemy, FastEnemy, TankEnemy, DasherEnemy, ShooterEnemy, DeathAnimation, SwarmEnemy
+from currency import CurrencyPickup
+from effects import ExplosionEffect
 
 BULLET_SPEED = 10
 BORDER_THICKNESS = 10  # Matches the border thickness
 TRAVEL_DISTANCE_AFTER_HIT = 5
 
 class Bullet:
-    def __init__(self, x, y, angle, map_width, map_height, pierce=0, delay=0, ricochet_count=0):
+    def __init__(self, x, y, angle, map_width, map_height, pierce=0, delay=0, ricochet_count=0, explosive=False):
         """Initializes a bullet with movement, piercing ability, and a fire delay."""
         self.rect = pygame.Rect(x, y, 10, 10)
         self.speed_x = BULLET_SPEED * math.cos(angle)
@@ -19,6 +22,7 @@ class Bullet:
         self.fired = False  # ✅ Prevents bullets from moving before firing
         self.fire_time = pygame.time.get_ticks() + delay  # ✅ Sets fire time
         self.ricochet_count = ricochet_count
+        self.explosive = explosive
         self.active = True
 
     def fire(self):
@@ -85,10 +89,21 @@ class Bullet:
                         self.speed_y = -self.speed_y
                         self.rect.y += self.speed_y * 3  # ✅ Push bullet away from obstacle
 
-
                     # ✅ Ensure bullet doesn’t collide again this frame
                     break
                 else:
+                    if self.explosive:
+                        explosion_radius = 50
+                        explosion_center = (self.rect.centerx, self.rect.centery)
+
+                        # ✅ Draw explosion effect (handled in `game.py`)
+                        game.explosions.append(ExplosionEffect(explosion_center, explosion_radius))
+
+                        # ✅ Damage nearby enemies
+                        for enemy in enemies[:]:
+                            if math.dist(explosion_center, (enemy.rect.centerx, enemy.rect.centery)) < explosion_radius:
+                                enemy.take_damage()
+
                     if self in game.player.bullets:
                         game.player.bullets.remove(self)
                     return
@@ -107,6 +122,19 @@ class Bullet:
                 # Deal full damage to enemy
                 enemy_died = enemy.take_damage(self.damage)
 
+                if self.explosive:
+                    explosion_radius = 50
+                    explosion_center = (self.rect.centerx, self.rect.centery)
+
+                    # ✅ Draw explosion effect (this will be handled in `game.py`)
+                    game.explosions.append(ExplosionEffect(explosion_center, explosion_radius))
+
+                    # ✅ Damage nearby enemies
+                    for other_enemy in enemies[:]:
+                        if math.dist(explosion_center,
+                                     (other_enemy.rect.centerx, other_enemy.rect.centery)) < explosion_radius:
+                            other_enemy.take_damage()
+
                 if enemy_died:
                     game.death_animations.append(DeathAnimation(enemy.rect.x, enemy.rect.y, enemy.rect.width))
                     enemies.remove(enemy)
@@ -115,18 +143,38 @@ class Bullet:
                     if isinstance(enemy, FastEnemy):
                         game.score += 75
                         game.player.gain_xp(2, game)
+                        drop_chance = 0.3
+                        currency_amount = random.randint(1, 3)
                     elif isinstance(enemy, TankEnemy):
                         game.score += 200
                         game.player.gain_xp(4, game)
+                        drop_chance = 0.7
+                        currency_amount = random.randint(3, 7)
                     elif isinstance(enemy, DasherEnemy):
                         game.score += 100
                         game.player.gain_xp(6, game)
+                        drop_chance = 0.5
+                        currency_amount = random.randint(2, 5)
                     elif isinstance(enemy, ShooterEnemy):
                         game.score += 100
                         game.player.gain_xp(7, game)
+                        drop_chance = 0.5
+                        currency_amount = random.randint(2, 4)
+                    elif isinstance(enemy, SwarmEnemy):
+                        game.score += 5
+                        game.player.gain_xp(1, game)
+                        drop_chance = 0.2
+                        currency_amount = 1
                     else:
                         game.score += 50
                         game.player.gain_xp(1, game)
+                        drop_chance = 0.4
+                        currency_amount = random.randint(1, 2)
+
+                    # Drop Currency on the Gameboard (Random Chance)
+                    if random.random() < drop_chance:
+                        currency_pickup = CurrencyPickup(enemy.rect.centerx, enemy.rect.centery, currency_amount)
+                        game.currency_drops.append(currency_pickup)
 
                 # ✅ Reduce pierce count after hitting an enemy
                 self.pierce -= 1
@@ -147,7 +195,9 @@ class Bullet:
     def draw(self, screen, camera_x, camera_y):
         """Draws the bullet, changing color based on pierce level."""
         # Color changes based on pierce level
-        if self.pierce == 0:
+        if self.explosive:
+            color = (64,64,64)
+        elif self.pierce == 0:
             color = (255, 255, 0)  # Yellow (default)
         elif self.pierce == 1:
             color = (255, 165, 0)  # Orange (piercing level 1)
@@ -171,3 +221,24 @@ class Bullet:
             color = (255, 0, 0)  # Red (max damage)
 
         self.color = color  # ✅ Ensure the color updates dynamically
+
+    class ExplosionEffect:
+        """Handles a visual explosion effect."""
+
+        def __init__(self, position, radius):
+            self.position = position
+            self.radius = radius
+            self.start_time = pygame.time.get_ticks()  # Track when explosion starts
+
+        def draw(self, screen, camera_x, camera_y):
+            """Draws an expanding explosion effect."""
+            time_elapsed = pygame.time.get_ticks() - self.start_time
+
+            if time_elapsed < 300:  # Explosion lasts for 300ms
+                alpha = max(255 - (time_elapsed * 2), 0)  # Fade out effect
+                explosion_surface = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
+                pygame.draw.circle(explosion_surface, (255, 140, 0, alpha), (self.radius, self.radius), self.radius)
+                screen.blit(explosion_surface,
+                            (self.position[0] - camera_x - self.radius, self.position[1] - camera_y - self.radius))
+            return time_elapsed >= 300  # Signal removal after 300ms
+

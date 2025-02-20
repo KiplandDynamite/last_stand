@@ -17,10 +17,14 @@ class Player:
         self.xp = 0  # XP system
         self.level = 1
         self.xp_to_next_level = 100  # Starting XP threshold
+        self.currency = 100
         self.pending_ability_choices = []
+        self.cooldowns = {"explosive_shot": 0, "sword_attack": 0, "dash": 0}
         self.abilities = []  # Holds selected abilities
+        self.actions = []  # Stores shop abilities
         self.base_speed = 5
         self.speed = self.base_speed
+
 
         self.move_speed_bonus = 0
 
@@ -44,6 +48,7 @@ class Player:
     def update(self, obstacles, game):
         keys = pygame.key.get_pressed()
 
+        # Move (PRESS WASD)
         move_x, move_y = 0, 0
         if keys[pygame.K_w]: move_y -= self.speed
         if keys[pygame.K_s]: move_y += self.speed
@@ -75,10 +80,13 @@ class Player:
         if self.adrenaline_active:
             self.speed *= (1 + self.adrenaline_boost)  # ✅ Dynamically modify speed while active
 
-        # ✅ Reset speed properly when Adrenaline Rush expires
         if self.adrenaline_active and current_time > self.adrenaline_end_time:
-            self.adrenaline_active = False  # End Adrenaline Rush
-            self.speed = self.base_speed * (1 + self.move_speed_bonus)  # ✅ Reset speed correctly
+            self.adrenaline_active = False
+            print("🔴 Adrenaline Rush ENDED! Speed Reset.")
+
+            # ✅ Instead of resetting `adrenaline_boost` to 0, keep the stacked value
+            adrenaline_upgrades = self.abilities.count("Adrenaline Rush")
+            self.adrenaline_boost = 0.2 * adrenaline_upgrades  # ✅ Maintain stacking
 
         # ✅ Secret Dev Command: Instant Level Up
         if keys[pygame.K_l]:
@@ -106,7 +114,8 @@ class Player:
         # Queue additional bullets with delay
         for i in range(self.bonus_bullets):
             delay_time = current_time + ((i + 1) * 50)  # ✅ Adjusted to match new fire rate scaling
-            self.queued_shots.append((delay_time, angle))
+            self.queued_shots.append((delay_time, angle, self.ricochet_count))
+
 
     def update_bullets(self):
         """Processes queued bullets and fires them when the delay is reached."""
@@ -114,11 +123,11 @@ class Player:
         shots_to_fire = []  # Store bullets that need to be fired
 
         for shot in self.queued_shots[:]:  # Iterate safely over queued shots
-            shot_time, angle = shot  # Extract stored shot data
+            shot_time, angle, ricochet_count = shot
             if current_time >= shot_time:
                 # ✅ Create and immediately fire the extra bullet
                 bullet = Bullet(self.rect.centerx, self.rect.centery, angle, self.MAP_WIDTH, self.MAP_HEIGHT,
-                                self.pierce, self.ricochet_count)
+                                self.pierce,0, ricochet_count)
                 bullet.fire()  # ✅ Ensure bullet is set to active
                 self.bullets.append(bullet)
                 shots_to_fire.append(shot)  # ✅ Mark this shot for removal
@@ -169,12 +178,20 @@ class Player:
         if self.xp >= self.xp_to_next_level:
             self.level_up(game)
 
-        # ✅ If Adrenaline Rush is unlocked, activate it
-        if "Adrenaline Rush" in [ability["name"] for ability in self.abilities]:
+        # Debugging: Check if Adrenaline Rush is in abilities
+        print(f"📊 Current Abilities: {self.abilities}")
+
+        if "Adrenaline Rush" in self.abilities:
             if not self.adrenaline_active:
                 self.adrenaline_active = True
                 self.adrenaline_end_time = pygame.time.get_ticks() + 5000  # ✅ Refresh 5s timer
-                print("🟢 Adrenaline Rush ACTIVATED!")
+                print(f"🔥 Adrenaline Rush ACTIVATED! Speed Boost: +{int(self.adrenaline_boost * 100)}%")
+
+                # ✅ Stack Adrenaline Rush Effect
+                adrenaline_upgrades = self.abilities.count("Adrenaline Rush")  # Count how many times it was selected
+                self.adrenaline_boost = 0.2 * adrenaline_upgrades  # ✅ Increase boost per stack
+                print(
+                    f"🔥 Adrenaline Rush Stack Count: {adrenaline_upgrades}, New Boost: +{int(self.adrenaline_boost * 100)}%")
 
     def level_up(self, game):
         """Handles level-up logic and presents upgrade choices."""
@@ -204,9 +221,57 @@ class Player:
 
             print(f"Selected: {selected_ability['name']}!")  # Debug
             selected_ability["effect"](self)  # Apply power-up effect
-            self.abilities.append(selected_ability)  # Store chosen ability
+            self.abilities.append(selected_ability["name"])
             self.pending_ability_choices = []  # Clear choices
             game.paused_for_upgrade = False  # Resume the game
+
+    def unlock_explosive_shot(self):
+        """Unlocks the explosive shot ability."""
+        if "Explosive Shot" not in self.abilities:
+            self.abilities.append("Explosive Shot")
+            print("🔥 Explosive Shot Unlocked!")
+
+    def use_explosive_shot(self, mouse_x, mouse_y, game):
+        """Fires an explosive shot that explodes on impact, dealing AoE damage."""
+        if "Explosive Shot" in self.actions and pygame.time.get_ticks() >= self.cooldowns["explosive_shot"]:
+            print("💥 Explosive Shot Fired!")
+            self.cooldowns["explosive_shot"] = pygame.time.get_ticks() + 2000 # 2 sec cooldown
+
+            # ✅ Calculate bullet direction using passed mouse coordinates
+            angle = math.atan2(mouse_y - self.rect.centery, mouse_x - self.rect.centerx)
+
+            print(
+                f"🎯 Aiming: Player ({self.rect.centerx}, {self.rect.centery}) -> Mouse ({mouse_x}, {mouse_y}), Angle: {math.degrees(angle)}°")
+
+            # ✅ Create explosive bullet
+            bullet = Bullet(self.rect.centerx, self.rect.centery, angle, self.MAP_WIDTH, self.MAP_HEIGHT,
+                            self.pierce, 0, self.ricochet_count, explosive=True)  # ✅ Explosive flag
+            bullet.fire()
+            self.bullets.append(bullet)
+
+    def unlock_sword_attack(self):
+        """Unlocks the sword attack ability."""
+        if "Sword Attack" not in self.abilities:
+            self.abilities.append("Sword Attack")
+            print("⚔️ Sword Attack Unlocked!")
+
+    def use_sword_attack(self, game):
+        """Performs a melee slash if off cooldown."""
+        if "Sword Attack" in self.actions and pygame.time.get_ticks() >= self.cooldowns["sword_attack"]:
+            print("⚔️ Sword Slash!")
+            self.cooldowns["sword_attack"] = pygame.time.get_ticks() + 3000  # 3 sec cooldown
+
+    def unlock_dash(self):
+        """Unlocks the dash ability."""
+        if "Dash" not in self.abilities:
+            self.abilities.append("Dash")
+            print("💨 Dash Ability Unlocked!")
+
+    def use_dash(self, game):
+        """Allows the player to dash if off cooldown."""
+        if "Dash" in self.actions and pygame.time.get_ticks() >= self.cooldowns["dash"]:
+            print("💨 Dashing!")
+            self.cooldowns["dash"] = pygame.time.get_ticks() + 5000  # 5 sec cooldown
 
     def force_level_up(self, game):
         """Dev command to instantly level up and pick an ability."""

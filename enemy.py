@@ -30,10 +30,18 @@ class Enemy:
 
         return False  # Otherwise, return False
 
-    def update(self, player, obstacles):
-        """Updates enemy movement, but stops moving if dying."""
-        if self.is_dying or self.rect is None:
-            return  # No movement if in death phase
+    def update(self, player, obstacles, game):
+        """Updates enemy movement and handles death removal."""
+
+        if self.is_dying:
+            # ✅ Remove enemy if death effect is finished
+            if pygame.time.get_ticks() - self.death_timer > 100:  # Adjust delay as needed
+                print(f"💀 Enemy removed at {self.rect.topleft}")
+                game.enemies.remove(self)  # ✅ Now actually removes the enemy
+            return  # ✅ Prevents further updates
+
+        if self.rect is None:
+            return  # No movement if rect is invalid
 
         dx, dy = player.rect.centerx - self.rect.centerx, player.rect.centery - self.rect.centery
         angle = math.atan2(dy, dx)
@@ -169,10 +177,20 @@ class DasherEnemy(Enemy):
         self.is_charging = False
         self.charge_start_time = 0
 
-    def update(self, player, obstacles):
+    def update(self, player, obstacles, game):
         """Updates movement, initiating a charge-up visual before dashing."""
         current_time = pygame.time.get_ticks()
         distance_to_player = math.sqrt((player.rect.centerx - self.rect.centerx) ** 2 + (player.rect.centery - self.rect.centery) ** 2)
+
+        if self.is_dying:
+            # ✅ Remove enemy if death effect is finished
+            if pygame.time.get_ticks() - self.death_timer > 100:  # Adjust delay as needed
+                print(f"💀 Enemy removed at {self.rect.topleft}")
+                game.enemies.remove(self)  # ✅ Now actually removes the enemy
+            return  # ✅ Prevents further updates
+
+        if self.rect is None:
+            return  # No movement if rect is invalid
 
         # Start charging phase if close enough and cooldown is up
         if distance_to_player < 125 and current_time - self.last_dash_time > self.dash_cooldown and not self.is_charging:
@@ -264,6 +282,16 @@ class ShooterEnemy(Enemy):
             (player.rect.centery - self.rect.centery) ** 2
         )
 
+        if self.is_dying:
+            # ✅ Remove enemy if death effect is finished
+            if pygame.time.get_ticks() - self.death_timer > 100:  # Adjust delay as needed
+                print(f"💀 Enemy removed at {self.rect.topleft}")
+                game.enemies.remove(self)  # ✅ Now actually removes the enemy
+            return  # ✅ Prevents further updates
+
+        if self.rect is None:
+            return  # No movement if rect is invalid
+
         if self.is_shooting:
             # Check if the warning period has passed, then fire
             if current_time - self.shoot_start_time >= self.shoot_warning_time:
@@ -340,6 +368,93 @@ class ShooterEnemy(Enemy):
                                      self.rect.width, self.rect.height))
 
         self.draw_health_bar(screen, camera_x, camera_y, enemy_color)
+
+class SwarmEnemy(Enemy):
+    """A weak, fast-moving enemy that spawns in groups and maintains swarm behavior."""
+    def __init__(self, x, y, swarm_group):
+        super().__init__(x, y, 1)  # 1 HP
+        self.rect = pygame.Rect(x, y, 25, 25)  # Smaller than regular enemies
+        self.speed = ENEMY_SPEED * 1.5  # Faster movement
+        self.swarm_group = swarm_group  # Reference to the swarm
+        self.swarm_separation_distance = 30  # Min distance to avoid stacking
+        self.swarm_cohesion_strength = 0.02  # Strength of movement toward swarm center
+        self.swarm_alignment_strength = 0.1  # Strength of moving in similar direction
+
+    def update(self, player, obstacles, game):
+        """Moves toward the player while maintaining swarm behavior."""
+
+        if self.is_dying:
+            # ✅ Remove enemy if death effect is finished
+            if pygame.time.get_ticks() - self.death_timer > 100:  # Adjust delay as needed
+                print(f"💀 Enemy removed at {self.rect.topleft}")
+                game.enemies.remove(self)  # ✅ Now actually removes the enemy
+            return  # ✅ Prevents further updates
+
+        if self.rect is None:
+            return  # No movement if rect is invalid
+
+        # Get direction toward player
+        dx, dy = player.rect.centerx - self.rect.centerx, player.rect.centery - self.rect.centery
+        angle = math.atan2(dy, dx)
+
+        move_x = self.speed * math.cos(angle)
+        move_y = self.speed * math.sin(angle)
+
+        # Swarm Cohesion: Move toward the center of the swarm
+        if self.swarm_group:
+            swarm_center_x = sum(enemy.rect.centerx for enemy in self.swarm_group) / len(self.swarm_group)
+            swarm_center_y = sum(enemy.rect.centery for enemy in self.swarm_group) / len(self.swarm_group)
+            move_x += (swarm_center_x - self.rect.centerx) * self.swarm_cohesion_strength
+            move_y += (swarm_center_y - self.rect.centery) * self.swarm_cohesion_strength
+
+        # Swarm Separation: Avoid stacking with other swarm members
+        for other in self.swarm_group:
+            if other != self:
+                distance = math.sqrt((self.rect.centerx - other.rect.centerx) ** 2 +
+                                     (self.rect.centery - other.rect.centery) ** 2)
+                if distance < self.swarm_separation_distance:
+                    move_x += (self.rect.centerx - other.rect.centerx) * 0.05
+                    move_y += (self.rect.centery - other.rect.centery) * 0.05
+
+        # Swarm Alignment: Move in the general direction of the swarm
+        avg_velocity_x = sum(enemy.speed * math.cos(angle) for enemy in self.swarm_group) / len(self.swarm_group)
+        avg_velocity_y = sum(enemy.speed * math.sin(angle) for enemy in self.swarm_group) / len(self.swarm_group)
+        move_x += avg_velocity_x * self.swarm_alignment_strength
+        move_y += avg_velocity_y * self.swarm_alignment_strength
+
+        # Collision Handling
+        old_x, old_y = self.rect.x, self.rect.y
+        self.rect.x += move_x
+        if any(obstacle.collides(self.rect) for obstacle in obstacles):
+            self.rect.x = old_x
+
+        self.rect.y += move_y
+        if any(obstacle.collides(self.rect) for obstacle in obstacles):
+            self.rect.y = old_y
+
+    def draw(self, screen, camera_x, camera_y):
+        """Draws the swarm enemy with a black outline and sickly green color."""
+        current_time = pygame.time.get_ticks()
+        outline_color = (0, 0, 0)  # Black outline
+        base_color = (100, 255, 100)  # Sickly green
+
+        # Flash effect when hit
+        if current_time - self.hit_timer < self.hit_effect_duration:
+            enemy_color = (255, 255, 255)  # Flash white
+            outline_color = (255, 0, 0)  # Red outline when hit
+        else:
+            enemy_color = base_color
+
+        pygame.draw.rect(screen, outline_color,
+                         pygame.Rect(self.rect.x - camera_x - 3, self.rect.y - camera_y - 3,
+                                     self.rect.width + 6, self.rect.height + 6))
+
+        pygame.draw.rect(screen, enemy_color, pygame.Rect(
+            self.rect.x - camera_x, self.rect.y - camera_y, self.rect.width, self.rect.height
+        ))
+
+        self.draw_health_bar(screen, camera_x, camera_y, enemy_color)
+
 
 class DeathAnimation:
     """Handles the death animation effect."""
