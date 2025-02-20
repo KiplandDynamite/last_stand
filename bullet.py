@@ -4,6 +4,7 @@ from enemy import Enemy, FastEnemy, TankEnemy, DasherEnemy, ShooterEnemy, DeathA
 
 BULLET_SPEED = 10
 BORDER_THICKNESS = 10  # Matches the border thickness
+TRAVEL_DISTANCE_AFTER_HIT = 5
 
 class Bullet:
     def __init__(self, x, y, angle, map_width, map_height, pierce=0, delay=0):
@@ -14,7 +15,7 @@ class Bullet:
         self.MAP_WIDTH = map_width
         self.MAP_HEIGHT = map_height
         self.pierce = pierce
-        self.damage = 1 + pierce  # ✅ Piercing increases bullet damage
+        self.damage = 1  # ✅ Piercing hits multiple enemies
         self.fired = False  # ✅ Prevents bullets from moving before firing
         self.fire_time = pygame.time.get_ticks() + delay  # ✅ Sets fire time
 
@@ -48,41 +49,56 @@ class Bullet:
                     game.player.bullets.remove(self)
                 return
 
-        # Track enemies hit (for piercing)
+        # Track enemies hit (to prevent multiple hits in one update cycle)
         enemies_hit = []
 
         # Check for collisions with enemies
         for enemy in enemies[:]:
             if enemy.rect is not None and self.rect.colliderect(enemy.rect):
+                if enemy in enemies_hit:  # ✅ Prevent hitting the same enemy twice in one update cycle
+                    continue
+
+                enemies_hit.append(enemy)  # ✅ Register enemy as "hit" to prevent multiple hits in one update
+
+                # Deal full damage to enemy
                 enemy_died = enemy.take_damage(self.damage)
-                enemies_hit.append(enemy)
 
                 if enemy_died:
                     game.death_animations.append(DeathAnimation(enemy.rect.x, enemy.rect.y, enemy.rect.width))
                     enemies.remove(enemy)
-                    game.score += 50
-                    game.player.gain_xp(25, game)
 
                     # Score scaling for different enemies
                     if isinstance(enemy, FastEnemy):
                         game.score += 75
+                        game.player.gain_xp(2, game)
                     elif isinstance(enemy, TankEnemy):
                         game.score += 200
+                        game.player.gain_xp(4, game)
                     elif isinstance(enemy, DasherEnemy):
                         game.score += 100
+                        game.player.gain_xp(6, game)
                     elif isinstance(enemy, ShooterEnemy):
                         game.score += 100
+                        game.player.gain_xp(7, game)
+                    else:
+                        game.score += 50
+                        game.player.gain_xp(1, game)
 
-                    # ✅ Debugging: Confirm bullet hit enemy
-                    print(f"💥 Bullet hit enemy at {enemy.rect.x}, {enemy.rect.y}, Damage: {self.damage}")
+                # ✅ Reduce pierce count after hitting an enemy
+                self.pierce -= 1
 
-                # ✅ Handle piercing bullets
-                if self.pierce <= 0:
+                # ✅ Move bullet forward slightly before it can hit another enemy
+                self.rect.x += self.speed_x * TRAVEL_DISTANCE_AFTER_HIT
+                self.rect.y += self.speed_y * TRAVEL_DISTANCE_AFTER_HIT
+
+                # ✅ If bullet has no more pierce left, remove it
+                if self.pierce < 0:
                     if self in game.player.bullets:
                         game.player.bullets.remove(self)
                     return
-                else:
-                    self.pierce -= 1  # ✅ Reduce pierce count but keep bullet active
+
+        # ✅ Ensure bullet color updates correctly
+        self.update_bullet_color()
 
     def draw(self, screen, camera_x, camera_y):
         """Draws the bullet, changing color based on pierce level."""
@@ -98,3 +114,16 @@ class Bullet:
 
         pygame.draw.rect(screen, color,
                          pygame.Rect(self.rect.x - camera_x, self.rect.y - camera_y, self.rect.width, self.rect.height))
+
+    def update_bullet_color(self):
+        """Updates bullet color based on remaining damage and pierce level."""
+        if self.damage <= 1:
+            color = (255, 255, 0)  # Yellow (base bullet)
+        elif self.damage == 2:
+            color = (255, 165, 0)  # Orange (mid-tier damage)
+        elif self.damage == 3:
+            color = (255, 69, 0)  # Red-orange (higher damage)
+        else:
+            color = (255, 0, 0)  # Red (max damage)
+
+        self.color = color  # ✅ Ensure the color updates dynamically

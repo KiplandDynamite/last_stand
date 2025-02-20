@@ -14,8 +14,13 @@ FONT = pygame.font.Font(None, 36)
 
 WAVE_DURATION = 30000  # 30 seconds per wave
 DOWN_TIME = 5000  # 5 seconds between waves
-INITIAL_SPAWN_INTERVAL = 1000  # Enemies start spawning every 2 seconds
+INITIAL_SPAWN_INTERVAL = 1500  # Enemies start spawning every 1.5 seconds
 
+# XP Bar Settings
+XP_BAR_WIDTH = WIDTH // 2
+XP_BAR_HEIGHT = 20
+XP_BAR_X = (WIDTH - XP_BAR_WIDTH) // 2
+XP_BAR_Y = 10  #
 
 class Game:
     def __init__(self):
@@ -29,7 +34,7 @@ class Game:
         self.score = 0
         self.last_enemy_spawn_time = pygame.time.get_ticks()
         self.spawn_interval = INITIAL_SPAWN_INTERVAL
-        self.enemy_types = [Enemy, FastEnemy, TankEnemy, DasherEnemy, ShooterEnemy]  # Start with only basic enemies
+        self.enemy_types = [Enemy]  # Start with only basic enemies
         self.death_animations = []  # Store active death animations
         self.enemy_bullets = [] # Store bullets fired by shooter enemies
 
@@ -69,7 +74,7 @@ class Game:
         ])
 
         if enemy_class == Enemy:
-            new_enemy = Enemy(x, y, 2)  # Normal enemies
+            new_enemy = Enemy(x, y, 5)  # Normal enemies
         elif enemy_class == FastEnemy:
             new_enemy = FastEnemy(x, y)  # Fast enemies
         elif enemy_class == TankEnemy:
@@ -93,16 +98,16 @@ class Game:
         print(f"Starting Wave {self.wave}! Spawn rate: {self.spawn_interval}ms")
 
         # Introduce new enemy types at wave milestones
-        if self.wave == 5 and FastEnemy not in self.enemy_types:
+        if self.wave == 3 and FastEnemy not in self.enemy_types:
             self.enemy_types.append(FastEnemy)
             print("Fast enemies introduced!")
-        elif self.wave == 10 and TankEnemy not in self.enemy_types:
+        elif self.wave == 5 and TankEnemy not in self.enemy_types:
             self.enemy_types.append(TankEnemy)
             print("Tank enemies introduced!")
-        elif self.wave == 15 and DasherEnemy not in self.enemy_types:
+        elif self.wave == 10 and DasherEnemy not in self.enemy_types:
             self.enemy_types.append(DasherEnemy)
             print("Dashers introduced!")
-        elif self.wave >= 20 and ShooterEnemy not in self.enemy_types:
+        elif self.wave >= 15 and ShooterEnemy not in self.enemy_types:
             self.enemy_types.append(ShooterEnemy)
             print("Shooter enemies introduced!")
 
@@ -175,7 +180,7 @@ class Game:
                 self.last_enemy_spawn_time = current_time
 
             # Update player movement
-            self.player.update(self.obstacles)
+            self.player.update(self.obstacles, self)
 
             # Update enemy movement
             for enemy in self.enemies[:]:
@@ -268,6 +273,21 @@ class Game:
             score_text = FONT.render(f"Score: {self.score}", True, WHITE)
             health_text = FONT.render(f"Health: {self.player.health}", True, WHITE)
 
+            # Calculate XP progress width
+            xp_progress_width = int((self.player.xp / self.player.xp_to_next_level) * XP_BAR_WIDTH)
+
+            # Draw XP bar background (gray)
+            pygame.draw.rect(self.screen, (100, 100, 100), (XP_BAR_X, XP_BAR_Y, XP_BAR_WIDTH, XP_BAR_HEIGHT))
+
+            # Draw XP progress (blue)
+            pygame.draw.rect(self.screen, (50, 150, 255), (XP_BAR_X, XP_BAR_Y, xp_progress_width, XP_BAR_HEIGHT))
+
+            # Draw Level (centered below the XP bar)
+            level_text = FONT.render(f"Lvl: {self.player.level}", True, (255, 255, 255))
+            level_text_x = XP_BAR_X + (XP_BAR_WIDTH - level_text.get_width()) // 2  # Center text
+            level_text_y = XP_BAR_Y + XP_BAR_HEIGHT + 5  # ✅ Place text **below** the XP bar
+            self.screen.blit(level_text, (level_text_x, level_text_y))
+
             self.screen.blit(wave_text, (10, 10))
             self.screen.blit(score_text, (WIDTH - 150, 10))
             self.screen.blit(health_text, (10, HEIGHT - 50))  # Bottom-left corner
@@ -282,20 +302,39 @@ class Game:
                 self.player.handle_level_up_input(event.key, self)
 
     def draw_upgrade_screen(self):
-        """Displays the upgrade selection screen centered on the screen."""
-        self.screen.fill((0, 0, 0))  # Black background
+        """Displays the upgrade selection screen while keeping the game scene visible."""
+        # 1️⃣ Draw the current game scene first (instead of clearing)
+        self.screen.fill((30, 30, 30))  # Keep background visible
 
+        camera_x = self.player.rect.centerx - WIDTH // 2
+        camera_y = self.player.rect.centery - HEIGHT // 2
+
+        # Draw all game elements
+        for bullet in self.player.bullets:
+            bullet.draw(self.screen, camera_x, camera_y)
+        for enemy in self.enemies:
+            enemy.draw(self.screen, camera_x, camera_y)
+        for obstacle in self.obstacles:
+            obstacle.draw(self.screen, camera_x, camera_y)
+        self.player.draw(self.screen, camera_x, camera_y)
+
+        # 2️⃣ Overlay a semi-transparent dark box to highlight the menu
+        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 180))  # Dark transparent overlay
+        self.screen.blit(overlay, (0, 0))
+
+        # 3️⃣ Draw Level-Up UI on top
         title_text = FONT.render("LEVEL UP! Choose an Upgrade:", True, WHITE)
-        title_rect = title_text.get_rect(center=(WIDTH // 2, 150))  # Center title
+        title_rect = title_text.get_rect(center=(WIDTH // 2, 150))
         self.screen.blit(title_text, title_rect)
 
         if self.player.pending_ability_choices:
             for i, ability in enumerate(self.player.pending_ability_choices, 1):
                 text = FONT.render(f"{i}: {ability['name']} - {ability['description']}", True, WHITE)
-                text_rect = text.get_rect(center=(WIDTH // 2, 200 + i * 50))  # Center each option
+                text_rect = text.get_rect(center=(WIDTH // 2, 200 + i * 50))
                 self.screen.blit(text, text_rect)
 
-        pygame.display.flip()  # Update the screen
+        pygame.display.flip()  # ✅ Now updates the screen without removing the game state
 
     def end_game(self):
         """Ends the game and prompts for leaderboard entry."""

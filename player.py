@@ -30,7 +30,7 @@ class Player:
         self.hit_timer = 0  # Time when player was last hit
         self.hit_effect_duration = 150  # Flash effect duration in milliseconds
 
-    def update(self, obstacles):
+    def update(self, obstacles, game):
         keys = pygame.key.get_pressed()
 
         move_x, move_y = 0, 0
@@ -54,6 +54,11 @@ class Player:
         # Clamp position inside game boundaries
         self.rect.x = max(BORDER_THICKNESS, min(self.rect.x, self.MAP_WIDTH - self.rect.width - BORDER_THICKNESS))
         self.rect.y = max(BORDER_THICKNESS, min(self.rect.y, self.MAP_HEIGHT - self.rect.height - BORDER_THICKNESS))
+
+        # ✅ Secret Dev Command: Instant Level Up
+        if keys[pygame.K_l]:
+            print("🛠 DEV COMMAND: Instant Level Up Activated!")
+            self.force_level_up(game)  # ✅ Calls a dedicated function to handle dev level-up
 
     def shoot(self, mouse_x, mouse_y):
         """Shoots bullets with a delay for extra shots while keeping smooth gameplay."""
@@ -96,25 +101,33 @@ class Player:
         self.hit_timer = pygame.time.get_ticks()  # Start hit effect timer
 
     def draw(self, screen, camera_x, camera_y):
-        """Draws the player with a flashing hit effect when damaged."""
+        """Draws the player with a bold black outline and a flashing hit effect when damaged."""
         current_time = pygame.time.get_ticks()
         time_since_hit = current_time - self.hit_timer
 
+        flash_interval = 75  # Time between flashes in milliseconds
+        flashes = 3  # Number of flashes during damage effect
+        outline_color = (0, 0, 0)  # Default black outline
+        base_color = (0, 255, 0, 255)  # Normal solid green
+
+        # Determine damage effect color
         if time_since_hit < self.hit_effect_duration:
-            flash_interval = 75  # Time between flashes in milliseconds
-            flashes = 3  # Number of flashes
-
-            # Determine whether to flash white or be slightly red & transparent
             if (time_since_hit // flash_interval) % 2 == 0:
-                color = (255, 255, 255, 180)  # Semi-transparent white flash
+                player_color = (255, 255, 255, 180)  # Semi-transparent white flash
+                outline_color = (255, 0, 0)  # Red outline when hit
             else:
-                color = (0, 255, 0, 180)  # Semi-transparent red
+                player_color = (0, 255, 0, 180)  # Semi-transparent green
         else:
-            color = (0, 255, 0, 255)  # Normal solid green
+            player_color = base_color  # Normal color
 
-        # Draw player with potential transparency
+        # Draw outline slightly larger than before
+        pygame.draw.rect(screen, outline_color,
+                         pygame.Rect(self.rect.x - camera_x - 3, self.rect.y - camera_y - 3,
+                                     self.rect.width + 6, self.rect.height + 6))
+
+        # Draw player with transparency support
         player_surface = pygame.Surface((self.rect.width, self.rect.height), pygame.SRCALPHA)
-        player_surface.fill(color)
+        player_surface.fill(player_color)
         screen.blit(player_surface, (self.rect.x - camera_x, self.rect.y - camera_y))
 
     def gain_xp(self, amount, game):
@@ -154,3 +167,8 @@ class Player:
             self.abilities.append(selected_ability)  # Store chosen ability
             self.pending_ability_choices = []  # Clear choices
             game.paused_for_upgrade = False  # Resume the game
+
+    def force_level_up(self, game):
+        """Dev command to instantly level up and pick an ability."""
+        self.xp = self.xp_to_next_level  # ✅ Sets XP to exactly what is needed to level up
+        self.level_up(game)  # ✅ Triggers the level-up sequence

@@ -20,6 +20,7 @@ class Enemy:
     def take_damage(self, damage=1):
         """Reduces HP when hit. If health reaches zero, starts death effect."""
         self.health -= damage
+        print(f"Enemy took {damage} dmg!")
         self.hit_timer = pygame.time.get_ticks()  # Start hit effect timer
 
         if self.health <= 0 and not self.is_dying:
@@ -53,46 +54,39 @@ class Enemy:
             self.rect.y = old_y  # Undo move if collision occurs
 
     def draw(self, screen, camera_x, camera_y):
-        """Draws the enemy, adding hit and death effects."""
+        """Draws the enemy with a black outline and a flashing hit effect."""
         if self.rect is None:
-            return  # Don't draw if the enemy is considered 'removed'
+            return  # Don't draw if the enemy is removed
 
         current_time = pygame.time.get_ticks()
+        outline_color = (0, 0, 0)  # Default black outline
+        base_color = (255, 0, 0)  # Normal red enemy
 
-        # If hit recently, flash white
+        # Damage effect
         if current_time - self.hit_timer < self.hit_effect_duration:
-            color = (255, 255, 255)  # White flash
+            enemy_color = (255, 255, 255)  # White flash
+            outline_color = (255, 0, 0)  # Red outline on hit
         elif self.is_dying:
-            color = (255, 255, 255)  # White flash on death
-
-            # Check if death effect time has passed
-            if current_time - self.death_timer > self.death_effect_duration:
-                self.rect = None  # Completely remove the enemy
-                return
-
+            enemy_color = (255, 255, 255)  # White flash on death
         else:
-            color = (255, 0, 0)  # Normal enemy color
+            enemy_color = base_color
 
-        # (Optional) Shrink enemy slightly when dying
-        if self.is_dying:
-            shrink_factor = 0.75  # Reduce size by 25% during death animation
-            width, height = int(self.rect.width * shrink_factor), int(self.rect.height * shrink_factor)
-            draw_x = self.rect.x - camera_x + (self.rect.width - width) // 2
-            draw_y = self.rect.y - camera_y + (self.rect.height - height) // 2
-        else:
-            width, height = self.rect.width, self.rect.height
-            draw_x = self.rect.x - camera_x
-            draw_y = self.rect.y - camera_y
+        # Shrink slightly when dying
+        shrink_factor = 0.75 if self.is_dying else 1.0
+        width, height = int(self.rect.width * shrink_factor), int(self.rect.height * shrink_factor)
+        draw_x = self.rect.x - camera_x + (self.rect.width - width) // 2
+        draw_y = self.rect.y - camera_y + (self.rect.height - height) // 2
 
-        pygame.draw.rect(
-            screen,
-            color,
-            pygame.Rect(draw_x, draw_y, width, height)
-        )
+        # Draw outline
+        pygame.draw.rect(screen, outline_color,
+                         pygame.Rect(draw_x - 3, draw_y - 3, width + 6, height + 6))
 
-        # Draw health bar only if not dying
+        # Draw enemy
+        pygame.draw.rect(screen, enemy_color, pygame.Rect(draw_x, draw_y, width, height))
+
+        # Draw health bar
         if not self.is_dying:
-            self.draw_health_bar(screen, camera_x, camera_y, color)
+            self.draw_health_bar(screen, camera_x, camera_y, enemy_color)
 
     def draw_health_bar(self, screen, camera_x, camera_y, color):
         """Draws a health bar above the enemy."""
@@ -104,48 +98,67 @@ class Enemy:
 class FastEnemy(Enemy):
     """Smaller, faster enemy with 1 HP."""
     def __init__(self, x, y):
-        super().__init__(x, y, 1)  # Fast enemies have 1 HP
+        super().__init__(x, y, 2)  # Fast enemies have 1 HP
         self.rect = pygame.Rect(x, y, 30, 30)  # Smaller size
         self.speed = ENEMY_SPEED * 1.8  # Faster speed
 
+    # Yellow Enemy (Fast)
     def draw(self, screen, camera_x, camera_y):
+        """Draws the fast enemy with a black outline and hit effect."""
         current_time = pygame.time.get_ticks()
+        outline_color = (0, 0, 0)
+        base_color = (255, 255, 0)
 
         if current_time - self.hit_timer < self.hit_effect_duration:
-            color = (255, 255, 255)  # White flash when hit
+            enemy_color = (255, 255, 255)
+            outline_color = (255, 0, 0)  # Flash red outline when hit
         else:
-            color = (255, 255, 0)  # Default yellow
+            enemy_color = base_color
 
-        pygame.draw.rect(screen, color, pygame.Rect(
+        pygame.draw.rect(screen, outline_color,
+                         pygame.Rect(self.rect.x - camera_x - 3, self.rect.y - camera_y - 3,
+                                     self.rect.width + 6, self.rect.height + 6))
+
+        pygame.draw.rect(screen, enemy_color, pygame.Rect(
             self.rect.x - camera_x, self.rect.y - camera_y, self.rect.width, self.rect.height
         ))
-        self.draw_health_bar(screen, camera_x, camera_y, color)
+
+        self.draw_health_bar(screen, camera_x, camera_y, enemy_color)
 
 
 class TankEnemy(Enemy):
     """Bigger, slower enemy with 5 HP."""
     def __init__(self, x, y):
-        super().__init__(x, y, 5)  # Tank enemies have 5 HP
+        super().__init__(x, y, 12)  # Tank enemies have 5 HP
         self.rect = pygame.Rect(x, y, 50, 50)  # Bigger size
         self.speed = ENEMY_SPEED * 0.75  # Slower movement
 
     def draw(self, screen, camera_x, camera_y):
+        """Draws the tank enemy with a black outline and hit effect."""
         current_time = pygame.time.get_ticks()
+        outline_color = (0, 0, 0)
+        base_color = (0, 0, 225)
 
         if current_time - self.hit_timer < self.hit_effect_duration:
-            color = (255, 255, 255)  # White flash when hit
+            enemy_color = (255, 255, 255)
+            outline_color = (255, 0, 0)  # Flash red outline when hit
         else:
-            color = (0, 0, 225)  # Default blue
+            enemy_color = base_color
 
-        pygame.draw.rect(screen, color, pygame.Rect(
+        pygame.draw.rect(screen, outline_color,
+                         pygame.Rect(self.rect.x - camera_x - 3, self.rect.y - camera_y - 3,
+                                     self.rect.width + 6, self.rect.height + 6))
+
+        pygame.draw.rect(screen, enemy_color, pygame.Rect(
             self.rect.x - camera_x, self.rect.y - camera_y, self.rect.width, self.rect.height
         ))
-        self.draw_health_bar(screen, camera_x, camera_y, color)
+
+        self.draw_health_bar(screen, camera_x, camera_y, enemy_color)
 
 class DasherEnemy(Enemy):
     """Enemy that dashes when close to the player."""
     def __init__(self, x, y):
-        super().__init__(x, y, 3)  # 3 HP, same as normal enemies
+        super().__init__(x, y, 5)  # 5 HP
         self.rect = pygame.Rect(x, y, 35, 35)  # Slightly smaller hitbox
         self.base_speed = ENEMY_SPEED * 1  # Normal movement speed
         self.dash_speed = ENEMY_SPEED * 25  # Much faster dash speed
@@ -197,35 +210,56 @@ class DasherEnemy(Enemy):
             self.rect.y = old_y  # Undo move if collision occurs
 
     def draw(self, screen, camera_x, camera_y):
-        """Draws the dasher enemy with a visual cue when charging and hit feedback."""
+        """Draws the dasher enemy with a black outline and a distinct charge effect."""
+        if self.rect is None:
+            return  # Don't draw if removed
+
         current_time = pygame.time.get_ticks()
+        outline_color = (0, 0, 0)
+        base_color = (255, 100, 100)  # Default pinkish-red
 
-        # Flash white if recently hit
+        # Damage & charge effect
         if current_time - self.hit_timer < self.hit_effect_duration:
-            color = (255, 255, 255)  # White flash on hit
+            enemy_color = (255, 255, 255)  # White flash on hit
+            outline_color = (255, 0, 0)  # Flash red outline when hit
         elif self.is_charging:
-            color = (255, 255, 0)  # Bright yellow when charging
+            enemy_color = (220, 50, 120)  # **NEW CHARGE COLOR** (Deep pink/magenta)
+        elif self.is_dying:
+            enemy_color = (255, 255, 255)  # White flash on death
+            outline_color = (255, 0, 0)
+
+            if current_time - self.death_timer > self.death_effect_duration:
+                self.rect = None
+                return
         else:
-            color = (255, 100, 100)  # Default pinkish-red color
+            enemy_color = base_color
 
-        pygame.draw.rect(
-            screen,
-            color,
-            pygame.Rect(self.rect.x - camera_x, self.rect.y - camera_y, self.rect.width, self.rect.height)
-        )
+        pygame.draw.rect(screen, outline_color,
+                         pygame.Rect(self.rect.x - camera_x - 3, self.rect.y - camera_y - 3,
+                                     self.rect.width + 6, self.rect.height + 6))
 
-        # Draw health bar
-        self.draw_health_bar(screen, camera_x, camera_y, color)
+        pygame.draw.rect(screen, enemy_color,
+                         pygame.Rect(self.rect.x - camera_x, self.rect.y - camera_y,
+                                     self.rect.width, self.rect.height))
+
+        self.draw_health_bar(screen, camera_x, camera_y, enemy_color)
+
+
+import pygame
+import math
+from enemy import Enemy
 
 class ShooterEnemy(Enemy):
     """An enemy that moves into range, stops, and shoots bullets at the player."""
     def __init__(self, x, y):
-        super().__init__(x, y, 3)  # Shooter has 3 HP
+        super().__init__(x, y, 5)  # 5 HP
         self.rect = pygame.Rect(x, y, 35, 35)  # Slightly smaller than normal enemies
         self.attack_range = 300  # Stops moving when within 300 pixels of player
         self.shoot_cooldown = 2000  # Fires every 2 seconds
         self.last_shot_time = pygame.time.get_ticks()  # Track last shot time
         self.speed = ENEMY_SPEED * 0.8  # Moves slightly slower than normal enemies
+        self.is_shooting = False  # Indicates if preparing to shoot
+        self.shoot_warning_time = 500  # Time before actually firing after warning
 
     def update(self, player, obstacles, enemy_bullets):
         """Updates movement and shooting behavior."""
@@ -234,6 +268,12 @@ class ShooterEnemy(Enemy):
             (player.rect.centerx - self.rect.centerx) ** 2 +
             (player.rect.centery - self.rect.centery) ** 2
         )
+
+        if self.is_shooting:
+            # Check if the warning period has passed, then fire
+            if current_time - self.shoot_start_time >= self.shoot_warning_time:
+                self.fire(player, enemy_bullets)
+            return  # Stay in shooting state until the bullet fires
 
         if distance_to_player > self.attack_range:
             # Move towards the player if out of range
@@ -255,28 +295,56 @@ class ShooterEnemy(Enemy):
                 self.rect.y = old_y  # Undo move if collision occurs
 
         else:
-            # If within range, stop and shoot
+            # If within range, stop and prepare to shoot
             if current_time - self.last_shot_time > self.shoot_cooldown:
-                enemy_bullets.append(ShooterBullet(self.rect.centerx, self.rect.centery, player.rect.centerx, player.rect.centery))
-                self.last_shot_time = current_time  # Reset cooldown
+                self.is_shooting = True  # Enable warning color
+                self.shoot_start_time = current_time  # Track when warning starts
+
+    def fire(self, player, enemy_bullets):
+        """Shoots a bullet at the player after the pre-fire warning."""
+        from shooterbullet import ShooterBullet  # ✅ Fix circular import
+
+        self.is_shooting = False  # ✅ Reset shooting state so it can shoot again
+        self.last_shot_time = pygame.time.get_ticks()  # ✅ Reset cooldown timer
+        enemy_bullets.append(ShooterBullet(self.rect.centerx, self.rect.centery, player.rect.centerx, player.rect.centery))
 
     def draw(self, screen, camera_x, camera_y):
-        """Draws the shooter enemy."""
+        """Draws the shooter enemy with a black outline and a visual cue before firing."""
+        if self.rect is None:
+            return  # Don't draw if removed
+
         current_time = pygame.time.get_ticks()
+        outline_color = (0, 0, 0)  # Default black outline
+        base_color = (150, 0, 255)  # Default purple
 
+        # Damage, pre-fire, and death effects
         if current_time - self.hit_timer < self.hit_effect_duration:
-            color = (255, 255, 255)  # Flash white when hit
+            enemy_color = (255, 255, 255)  # White flash when hit
+            outline_color = (255, 0, 0)  # Flash red outline when hit
+        elif self.is_shooting:
+            enemy_color = (255, 0, 200)   # **New Pre-Fire Warning Color (# Brighter, higher contrast purple)**
+        elif self.is_dying:
+            enemy_color = (255, 255, 255)  # White flash on death
+            outline_color = (255, 0, 0)
+
+            # Ensure death animation plays before removing enemy
+            if current_time - self.death_timer > self.death_effect_duration:
+                self.rect = None
+                return
         else:
-            color = (150, 0, 255)  # Purple color for shooter
+            enemy_color = base_color
 
-        pygame.draw.rect(
-            screen,
-            color,
-            pygame.Rect(self.rect.x - camera_x, self.rect.y - camera_y, self.rect.width, self.rect.height)
-        )
+        # Draw outline first
+        pygame.draw.rect(screen, outline_color,
+                         pygame.Rect(self.rect.x - camera_x - 3, self.rect.y - camera_y - 3,
+                                     self.rect.width + 6, self.rect.height + 6))
 
-        self.draw_health_bar(screen, camera_x, camera_y, color)
+        # Draw enemy
+        pygame.draw.rect(screen, enemy_color,
+                         pygame.Rect(self.rect.x - camera_x, self.rect.y - camera_y,
+                                     self.rect.width, self.rect.height))
 
+        self.draw_health_bar(screen, camera_x, camera_y, enemy_color)
 
 class DeathAnimation:
     """Handles the death animation effect."""
