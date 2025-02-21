@@ -34,7 +34,7 @@ class Game:
         self.score = 0
         self.last_enemy_spawn_time = pygame.time.get_ticks()
         self.spawn_interval = INITIAL_SPAWN_INTERVAL
-        self.enemy_types = [Enemy, FastEnemy, TankEnemy, DasherEnemy, ShooterEnemy, SwarmEnemy]  # Start with only basic enemies
+        self.enemy_types = [Enemy]  # Start with only basic enemies
         self.death_animations = []  # Store active death animations
         self.enemy_bullets = [] # Store bullets fired by shooter enemies
         self.currency_drops = [] # Store currency of player
@@ -126,19 +126,19 @@ class Game:
         print(f"Starting Wave {self.wave}! Spawn rate: {self.spawn_interval}ms")
 
         # Introduce new enemy types at wave milestones
-        if self.wave == 3 and FastEnemy not in self.enemy_types:
+        if self.wave == 2 and FastEnemy not in self.enemy_types:
             self.enemy_types.append(FastEnemy)
             print("Fast enemies introduced!")
-        elif self.wave == 5 and TankEnemy not in self.enemy_types:
+        elif self.wave == 3 and TankEnemy not in self.enemy_types:
             self.enemy_types.append(TankEnemy)
             print("Tank enemies introduced!")
-        elif self.wave == 7 and DasherEnemy not in self.enemy_types:
+        elif self.wave == 5 and DasherEnemy not in self.enemy_types:
             self.enemy_types.append(DasherEnemy)
             print("Dashers introduced!")
-        elif self.wave >= 9 and ShooterEnemy not in self.enemy_types:
+        elif self.wave >= 7 and ShooterEnemy not in self.enemy_types:
             self.enemy_types.append(ShooterEnemy)
             print("Shooter enemies introduced!")
-        elif self.wave >= 11 and SwarmEnemy not in self.enemy_types:
+        elif self.wave >= 9 and SwarmEnemy not in self.enemy_types:
             self.enemy_types.append(SwarmEnemy)
             print("Swarm Enemies introduced!")
 
@@ -316,9 +316,12 @@ class Game:
             wave_text = FONT.render(f"Wave: {self.wave}", True, WHITE)
             score_text = FONT.render(f"Score: {self.score}", True, WHITE)
             health_text = FONT.render(f"Health: {self.player.health}", True, WHITE)
-            currency_text = FONT.render(f"Coins: {self.player.currency}", True, (192, 192, 192))  # Silver text
-            text_width, text_height = currency_text.get_size()
-            self.screen.blit(currency_text, (WIDTH - text_width - 20, HEIGHT - text_height - 20))
+
+            # Draw UI action elements
+            self.draw_ability_ui()
+
+            # Draw UI shop button
+            self.draw_shop_ui()
 
             # Calculate XP progress width
             xp_progress_width = int((self.player.xp / self.player.xp_to_next_level) * XP_BAR_WIDTH)
@@ -353,9 +356,6 @@ class Game:
         # 1️⃣ Draw the current game scene first (instead of clearing)
         self.screen.fill((30, 30, 30))  # Keep background visible
 
-        camera_x = self.player.rect.centerx - WIDTH // 2
-        camera_y = self.player.rect.centery - HEIGHT // 2
-
         # Draw all game elements
         for bullet in self.player.bullets:
             bullet.draw(self.screen, self.camera_x, self.camera_y)
@@ -384,37 +384,77 @@ class Game:
         pygame.display.flip()  # ✅ Now updates the screen without removing the game state
 
     def open_shop(self):
-        """Pauses the game and displays the shop UI."""
+        """Pauses the game and displays the shop UI with a semi-transparent overlay and ESC button."""
         shop_open = True
 
         while shop_open:
-            self.screen.fill((30, 30, 30))  # Dark background
-            title = FONT.render("Shop - Press ESC to Exit", True, (255, 255, 255))
-            self.screen.blit(title, (WIDTH // 2 - 100, 50))
+            # ✅ 1️⃣ Keep the game scene visible by drawing everything first
+            self.screen.fill((30, 30, 30))
 
-            # Define available utility abilities
+            for bullet in self.player.bullets:
+                bullet.draw(self.screen, self.camera_x, self.camera_y)
+            for enemy in self.enemies:
+                enemy.draw(self.screen, self.camera_x, self.camera_y)
+            for obstacle in self.obstacles:
+                obstacle.draw(self.screen, self.camera_x, self.camera_y)
+            self.player.draw(self.screen, self.camera_x, self.camera_y, self)
+
+            # ✅ 2️⃣ Overlay a semi-transparent dark box (like Upgrade Screen)
+            overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 180))  # Dark transparent overlay
+            self.screen.blit(overlay, (0, 0))
+
+            # ✅ 3️⃣ Display "Shop" Title (Larger, Centered)
+            title_font = pygame.font.Font(None, 50)  # Bigger font
+            title = title_font.render("SHOP", True, (255, 255, 255))
+            title_rect = title.get_rect(center=(WIDTH // 2, 80))  # Centered at top
+            self.screen.blit(title, title_rect)
+
+            # ✅ 4️⃣ Draw ESC Button in the Top Right Corner
+            esc_color = (200, 200, 200)  # Light gray ESC button
+            esc_x, esc_y = WIDTH - 80, 20  # Position in top-right
+            esc_width, esc_height = 50, 40
+            esc_rect = pygame.Rect(esc_x, esc_y, esc_width, esc_height)
+
+            # Semi-transparent fill
+            esc_surface = pygame.Surface((esc_width, esc_height), pygame.SRCALPHA)
+            pygame.draw.rect(esc_surface, (*esc_color, 50), (0, 0, esc_width, esc_height), border_radius=10)
+            self.screen.blit(esc_surface, (esc_x, esc_y))
+
+            # Outline
+            pygame.draw.rect(self.screen, esc_color, esc_rect, border_radius=10, width=3)
+
+            # ESC text
+            esc_text = FONT.render("ESC", True, (255, 255, 255))
+            esc_text_x = esc_x + (esc_width // 2 - esc_text.get_width() // 2)
+            esc_text_y = esc_y + (esc_height // 2 - esc_text.get_height() // 2)
+            self.screen.blit(esc_text, (esc_text_x, esc_text_y))
+
+            # ✅ 5️⃣ Define available utility abilities
             upgrades = [
-                {"name": "Explosive Shot", "cost": 30, "effect": self.player.unlock_explosive_shot},
-                {"name": "Sword Attack", "cost": 25, "effect": self.player.unlock_sword_attack},
-                {"name": "Dash Ability", "cost": 20, "effect": self.player.unlock_dash}
+                {"name": "Explosive Shot", "cost": 50, "effect": self.player.unlock_explosive_shot},
+                {"name": "Sword Attack", "cost": 50, "effect": self.player.unlock_sword_attack},
+                {"name": "Dash Ability", "cost": 25, "effect": self.player.unlock_dash}
             ]
 
-            # Display available upgrades
-            y_offset = 150
+            # ✅ 6️⃣ Display available upgrades
+            y_offset = 200
             for i, upgrade in enumerate(upgrades):
-                color = (100, 255, 100) if upgrade["name"] not in self.player.abilities else (
+                color = (100, 255, 100) if upgrade["name"] not in self.player.actions else (
                 150, 150, 150)  # Gray out if purchased
                 upgrade_text = FONT.render(f"{i + 1}. {upgrade['name']} - {upgrade['cost']} Coins", True, color)
-                self.screen.blit(upgrade_text, (WIDTH // 2 - 150, y_offset))
+                text_rect = upgrade_text.get_rect(center=(WIDTH // 2, y_offset))
+                self.screen.blit(upgrade_text, text_rect)
                 y_offset += 50
 
-            # Show player's current currency
+            # ✅ 7️⃣ Show player's current currency at the bottom
             currency_text = FONT.render(f"Coins: {self.player.currency}", True, (255, 223, 0))
-            self.screen.blit(currency_text, (WIDTH // 2 - 150, HEIGHT - 100))
+            currency_rect = currency_text.get_rect(center=(WIDTH // 2, HEIGHT - 100))
+            self.screen.blit(currency_text, currency_rect)
 
             pygame.display.flip()
 
-            # Handle shop interactions
+            # ✅ 8️⃣ Handle shop interactions
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
@@ -432,6 +472,98 @@ class Game:
                             self.player.actions.append(
                                 selected_upgrade["name"])  # Store in actions instead of abilities
                             selected_upgrade["effect"]()  # Apply the ability
+
+    def draw_ability_ui(self):
+        """Displays UI elements for purchased abilities with proper cooldown indicators."""
+        ability_icons = {
+            "Explosive Shot": ("Q", (255, 0, 0), "explosive_shot"),  # Red for explosive shot
+            "Sword Attack": ("E", (0, 0, 255), None),  # No cooldown key, handled separately
+            "Dash Ability": ("Shift", (0, 255, 0), "dash")  # Green for dash
+        }
+
+        x_offset = WIDTH - 875  # Align abilities correctly
+        y_position = HEIGHT - 60  # Bottom of the screen
+
+        current_time = pygame.time.get_ticks()
+
+        for ability in self.player.actions:
+            if ability in ability_icons:
+                key, color, cooldown_key = ability_icons[ability]
+
+                # Define button sizes
+                if ability == "Dash Ability":
+                    button_width = 80  # Longer bar for Shift key
+                else:
+                    button_width = 50  # Square buttons for Q and E
+
+                button_height = 40
+                button_rect = pygame.Rect(x_offset, y_position, button_width, button_height)
+
+                # ✅ Draw the base button with rounded edges
+                fill_surface = pygame.Surface((button_width, button_height), pygame.SRCALPHA)
+                pygame.draw.rect(fill_surface, (*color, 50), (0, 0, button_width, button_height), border_radius=10)
+                self.screen.blit(fill_surface, (x_offset, y_position))
+
+                pygame.draw.rect(self.screen, color, button_rect, border_radius=10, width=3)  # Outline
+
+                # ✅ Cooldown logic: Darken button when on cooldown
+                if cooldown_key:
+                    # Regular cooldown abilities (Explosive Shot, Dash)
+                    if current_time < self.player.cooldowns[cooldown_key]:
+                        cooldown_surface = pygame.Surface((button_width, button_height), pygame.SRCALPHA)
+                        pygame.draw.rect(cooldown_surface, (0, 0, 0, 150), (0, 0, button_width, button_height),
+                                         border_radius=10)
+                        self.screen.blit(cooldown_surface, (x_offset, y_position))
+                else:
+                    # Special case for Sword Attack (handled inside SwordAttack class)
+                    if current_time - self.player.sword_attack.last_attack_time < self.player.sword_attack.cooldown:
+                        cooldown_surface = pygame.Surface((button_width, button_height), pygame.SRCALPHA)
+                        pygame.draw.rect(cooldown_surface, (0, 0, 0, 150), (0, 0, button_width, button_height),
+                                         border_radius=10)
+                        self.screen.blit(cooldown_surface, (x_offset, y_position))
+
+                # ✅ Draw the keybind text
+                key_text = FONT.render(key, True, (255, 255, 255))  # White text
+                text_x = x_offset + (button_width // 2 - key_text.get_width() // 2)
+                text_y = y_position + (button_height // 2 - key_text.get_height() // 2)
+                self.screen.blit(key_text, (text_x, text_y))
+
+                x_offset += button_width + 10  # Space out buttons
+
+    def draw_shop_ui(self):
+        """Displays the shop button and currency counter in the bottom-right corner."""
+        shop_key = "B"
+        shop_color = (255, 215, 0)  # Gold color for the shop button
+
+        x_position = WIDTH - 150  # Keep text in place
+        y_position = HEIGHT - 100  # Above the currency display
+        button_x_position = x_position + 50  # Move only the button to the right
+
+        # Define button size
+        button_width = 50
+        button_height = 40
+        button_rect = pygame.Rect(button_x_position, y_position, button_width, button_height)
+
+        # Draw gold rounded shop button
+        fill_surface = pygame.Surface((button_width, button_height), pygame.SRCALPHA)
+        pygame.draw.rect(fill_surface, (*shop_color, 50), (0, 0, button_width, button_height), border_radius=10)
+        self.screen.blit(fill_surface, (button_x_position, y_position))
+
+        pygame.draw.rect(self.screen, shop_color, button_rect, border_radius=10, width=3)  # Outline
+
+        # Draw shop key text
+        key_text = FONT.render(shop_key, True, (255, 255, 255))
+        text_x = button_x_position + (button_width // 2 - key_text.get_width() // 2)
+        text_y = y_position + (button_height // 2 - key_text.get_height() // 2)
+        self.screen.blit(key_text, (text_x, text_y))
+
+        # Draw "Shop:" label above the button (kept in place)
+        shop_label = FONT.render("Shop:", True, (255, 255, 255))
+        self.screen.blit(shop_label, (x_position - 30, y_position + 5))
+
+        # Draw currency counter below the shop button (kept in place)
+        currency_text = FONT.render(f"Currency: {self.player.currency}", True, (255, 223, 0))  # Gold text
+        self.screen.blit(currency_text, (x_position - 30, y_position + 50))
 
     def end_game(self):
         """Ends the game and prompts for leaderboard entry."""

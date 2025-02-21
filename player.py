@@ -18,7 +18,7 @@ class Player:
         self.xp = 0  # XP system
         self.level = 1
         self.xp_to_next_level = 100  # Starting XP threshold
-        self.currency = 100
+        self.currency = 0
         self.pending_ability_choices = []
         self.cooldowns = {"explosive_shot": 0, "sword_attack": 0, "dash": 0}
         self.abilities = []  # Holds selected abilities

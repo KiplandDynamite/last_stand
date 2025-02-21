@@ -2,9 +2,9 @@ KippyD,26,101025
 KippyD,17,32850
 KippyD,12,23700
 Jonathan Jacobo,10,20325
+Douglas,16,17725
 Walter Mitty,10,14400
 KippyD,9,14000
 Alfred,9,11900
 House MD,14,10400
 KippyD,11,10325
-Arthur,11,8675

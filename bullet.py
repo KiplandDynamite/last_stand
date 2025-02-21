@@ -126,32 +126,32 @@ class Bullet:
                     # ✅ Handle XP & Score Rewards
                     if isinstance(enemy, FastEnemy):
                         game.score += 75
-                        game.player.gain_xp(2, game)
+                        game.player.gain_xp(4, game)
                         drop_chance = 0.3
                         currency_amount = random.randint(1, 3)
                     elif isinstance(enemy, TankEnemy):
                         game.score += 200
-                        game.player.gain_xp(4, game)
+                        game.player.gain_xp(8, game)
                         drop_chance = 0.7
                         currency_amount = random.randint(3, 7)
                     elif isinstance(enemy, DasherEnemy):
                         game.score += 100
-                        game.player.gain_xp(6, game)
+                        game.player.gain_xp(12, game)
                         drop_chance = 0.5
                         currency_amount = random.randint(2, 5)
                     elif isinstance(enemy, ShooterEnemy):
                         game.score += 100
-                        game.player.gain_xp(7, game)
+                        game.player.gain_xp(14, game)
                         drop_chance = 0.5
                         currency_amount = random.randint(2, 4)
                     elif isinstance(enemy, SwarmEnemy):
                         game.score += 5
-                        game.player.gain_xp(1, game)
+                        game.player.gain_xp(2, game)
                         drop_chance = 0.2
                         currency_amount = 1
                     else:
                         game.score += 50
-                        game.player.gain_xp(1, game)
+                        game.player.gain_xp(3, game)
                         drop_chance = 0.4
                         currency_amount = random.randint(1, 2)
 
