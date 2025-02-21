@@ -30,7 +30,7 @@ class Enemy:
 
         return False  # Otherwise, return False
 
-    def update(self, player, obstacles, game):
+    def update(self, player, obstacles, game, enemy_bullets=None):
         """Updates enemy movement and handles death removal."""
 
         if self.is_dying:
@@ -177,7 +177,7 @@ class DasherEnemy(Enemy):
         self.is_charging = False
         self.charge_start_time = 0
 
-    def update(self, player, obstacles, game):
+    def update(self, player, obstacles, game, enemy_bullets=None):
         """Updates movement, initiating a charge-up visual before dashing."""
         current_time = pygame.time.get_ticks()
         distance_to_player = math.sqrt((player.rect.centerx - self.rect.centerx) ** 2 + (player.rect.centery - self.rect.centery) ** 2)
@@ -274,7 +274,7 @@ class ShooterEnemy(Enemy):
         self.is_shooting = False  # Indicates if preparing to shoot
         self.shoot_warning_time = 500  # Time before actually firing after warning
 
-    def update(self, player, obstacles, enemy_bullets):
+    def update(self, player, obstacles, game, enemy_bullets=None):
         """Updates movement and shooting behavior."""
         current_time = pygame.time.get_ticks()
         distance_to_player = math.sqrt(

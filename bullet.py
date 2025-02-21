@@ -30,7 +30,7 @@ class Bullet:
         self.fired = True
 
     def update(self, obstacles, enemies, game):
-        """Moves the bullet and handles collisions only if it has been fired."""
+        """Moves the bullet and handles collisions with walls, obstacles, and enemies."""
         current_time = pygame.time.get_ticks()
         if current_time < self.fire_time:
             return  # ✅ Delayed bullet waiting to fire
@@ -41,8 +41,33 @@ class Bullet:
         self.rect.x += self.speed_x
         self.rect.y += self.speed_y
 
-        # ✅ Handle Ricochets Before Destroying Bullet
-        # ✅ Detect wall collision (TOP & BOTTOM) → Flip `speed_y`, keep `speed_x`
+        # ✅ Check for obstacle (wall) collisions FIRST
+        for obstacle in obstacles:
+            if self.rect.colliderect(obstacle.rect):
+                if self.ricochet_count > 0:
+                    self.ricochet_count -= 1
+
+                    # ✅ Determine if collision was horizontal or vertical
+                    overlap_x = min(abs(self.rect.right - obstacle.rect.left),
+                                    abs(self.rect.left - obstacle.rect.right))
+                    overlap_y = min(abs(self.rect.bottom - obstacle.rect.top),
+                                    abs(self.rect.top - obstacle.rect.bottom))
+
+                    if overlap_x < overlap_y:
+                        self.speed_x = -self.speed_x  # ✅ Flip horizontally
+                        self.rect.x += self.speed_x * 3  # ✅ Prevent sticking
+                    else:
+                        self.speed_y = -self.speed_y  # ✅ Flip vertically
+                        self.rect.y += self.speed_y * 3  # ✅ Prevent sticking
+
+                    break  # ✅ Prevent multiple ricochets in one frame
+                else:
+                    # ✅ Remove bullet if out of ricochets
+                    if self in game.player.bullets:
+                        game.player.bullets.remove(self)
+                    return
+
+                    # ✅ Check for Screen Border Collisions (AFTER obstacles)
         if self.rect.top <= 0 or self.rect.bottom >= self.MAP_HEIGHT:
             if self.ricochet_count > 0:
                 self.ricochet_count -= 1
@@ -51,9 +76,8 @@ class Bullet:
             else:
                 if self in game.player.bullets:
                     game.player.bullets.remove(self)
-                return  # ✅ Ensure it doesn't continue after being removed
+                return
 
-        # ✅ Detect wall collision (LEFT & RIGHT) → Flip `speed_x`, keep `speed_y`
         if self.rect.left <= 0 or self.rect.right >= self.MAP_WIDTH:
             if self.ricochet_count > 0:
                 self.ricochet_count -= 1
@@ -64,69 +88,29 @@ class Bullet:
                     game.player.bullets.remove(self)
                 return
 
-        # Remove bullet if it leaves the map boundaries
+                # ✅ If bullet goes out of bounds, remove it
         if not (0 <= self.rect.x <= self.MAP_WIDTH and 0 <= self.rect.y <= self.MAP_HEIGHT):
             if self in game.player.bullets:
                 game.player.bullets.remove(self)
             return
 
-        for obstacle in obstacles:
-            if self.rect.colliderect(obstacle.rect):
-                if self.ricochet_count > 0:
-
-                    self.ricochet_count -= 1  # ✅ Reduce count BEFORE changing speed
-
-                    # ✅ Get the overlap to determine if the bullet hit horizontally or vertically
-                    overlap_x = min(abs(self.rect.right - obstacle.rect.left),
-                                    abs(self.rect.left - obstacle.rect.right))
-                    overlap_y = min(abs(self.rect.bottom - obstacle.rect.top),
-                                    abs(self.rect.top - obstacle.rect.bottom))
-
-                    if overlap_x < overlap_y:  # ✅ If the horizontal overlap is smaller → Bounce horizontally
-                        self.speed_x = -self.speed_x
-                        self.rect.x += self.speed_x * 3  # ✅ Push bullet away from obstacle
-                    else:  # ✅ Otherwise, bounce vertically
-                        self.speed_y = -self.speed_y
-                        self.rect.y += self.speed_y * 3  # ✅ Push bullet away from obstacle
-
-                    # ✅ Ensure bullet doesn’t collide again this frame
-                    break
-                else:
-                    if self.explosive:
-                        explosion_radius = 50
-                        explosion_center = (self.rect.centerx, self.rect.centery)
-
-                        # ✅ Draw explosion effect (handled in `game.py`)
-                        game.explosions.append(ExplosionEffect(explosion_center, explosion_radius))
-
-                        # ✅ Damage nearby enemies
-                        for enemy in enemies[:]:
-                            if math.dist(explosion_center, (enemy.rect.centerx, enemy.rect.centery)) < explosion_radius:
-                                enemy.take_damage()
-
-                    if self in game.player.bullets:
-                        game.player.bullets.remove(self)
-                    return
-
-        # Track enemies hit (to prevent multiple hits in one update cycle)
+            # ✅ Track enemies hit (prevents multiple hits in one update)
         enemies_hit = []
 
-        # Check for collisions with enemies
+        # ✅ Check for collisions with enemies
         for enemy in enemies[:]:
             if enemy.rect is not None and self.rect.colliderect(enemy.rect):
-                if enemy in enemies_hit:  # ✅ Prevent hitting the same enemy twice in one update cycle
-                    continue
+                if enemy in enemies_hit:
+                    continue  # ✅ Prevent hitting the same enemy twice in one update cycle
 
-                enemies_hit.append(enemy)  # ✅ Register enemy as "hit" to prevent multiple hits in one update
+                enemies_hit.append(enemy)
 
-                # Deal full damage to enemy
+                # Deal damage
                 enemy_died = enemy.take_damage(self.damage)
 
                 if self.explosive:
                     explosion_radius = 50
                     explosion_center = (self.rect.centerx, self.rect.centery)
-
-                    # ✅ Draw explosion effect (this will be handled in `game.py`)
                     game.explosions.append(ExplosionEffect(explosion_center, explosion_radius))
 
                     # ✅ Damage nearby enemies
@@ -139,7 +123,7 @@ class Bullet:
                     game.death_animations.append(DeathAnimation(enemy.rect.x, enemy.rect.y, enemy.rect.width))
                     enemies.remove(enemy)
 
-                    # Score scaling for different enemies
+                    # ✅ Handle XP & Score Rewards
                     if isinstance(enemy, FastEnemy):
                         game.score += 75
                         game.player.gain_xp(2, game)
@@ -171,7 +155,7 @@ class Bullet:
                         drop_chance = 0.4
                         currency_amount = random.randint(1, 2)
 
-                    # Drop Currency on the Gameboard (Random Chance)
+                    # ✅ Drop Currency with Random Chance
                     if random.random() < drop_chance:
                         currency_pickup = CurrencyPickup(enemy.rect.centerx, enemy.rect.centery, currency_amount)
                         game.currency_drops.append(currency_pickup)
@@ -183,13 +167,12 @@ class Bullet:
                 self.rect.x += self.speed_x * TRAVEL_DISTANCE_AFTER_HIT
                 self.rect.y += self.speed_y * TRAVEL_DISTANCE_AFTER_HIT
 
-                # ✅ If bullet has no more pierce left, remove it
-                if self.pierce < 0:
+                if self.pierce < 0:  # ✅ Remove bullet if pierce is depleted
                     if self in game.player.bullets:
                         game.player.bullets.remove(self)
                     return
 
-        # ✅ Ensure bullet color updates correctly
+                    # ✅ Ensure bullet color updates correctly
         self.update_bullet_color()
 
     def draw(self, screen, camera_x, camera_y):

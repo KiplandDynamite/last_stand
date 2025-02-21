@@ -211,7 +211,7 @@ class Game:
 
                     # Dash (Press Shift)
                     if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]:
-                        self.player.use_dash(self)
+                        self.player.use_dash()
 
                 # Open shop when 'B' is pressed
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_b:
@@ -232,7 +232,7 @@ class Game:
             # Update enemy movement
             for enemy in self.enemies[:]:
                 if isinstance(enemy, ShooterEnemy):
-                    enemy.update(self.player, self.obstacles, self.enemy_bullets)  # Pass bullets list
+                    enemy.update(self.player, self.obstacles, self, self.enemy_bullets)  # Pass bullets list
                 else:
                     enemy.update(self.player, self.obstacles, self)  # Normal enemies don't need bullets
 
@@ -247,9 +247,7 @@ class Game:
 
                 for enemy in self.enemies:
                     if enemy.rect is not None and bullet.rect.colliderect(enemy.rect):
-                        self.player.bullets.remove(bullet)
-                        bullet.hit_enemy(enemy, self)  # ✅ Hand off enemy hit logic to bullet.py
-                        break  # Exit loop after bullet hits something
+                        break  # ✅ Let bullet.py handle enemy damage & removal
 
             # Remove bullets after iteration to prevent modifying the list while looping
             for bullet in bullets_to_remove:
@@ -293,7 +291,7 @@ class Game:
             self.player.update_bullets()
 
             # Draw everything with camera offset
-            self.player.draw(self.screen, self.camera_x, self.camera_y)
+            self.player.draw(self.screen, self.camera_x, self.camera_y, self)
             for bullet in self.player.bullets:
                 bullet.draw(self.screen, self.camera_x, self.camera_y)
             for enemy in self.enemies:
@@ -365,7 +363,7 @@ class Game:
             enemy.draw(self.screen, self.camera_x, self.camera_y)
         for obstacle in self.obstacles:
             obstacle.draw(self.screen, self.camera_x, self.camera_y)
-        self.player.draw(self.screen, self.camera_x, self.camera_y)
+        self.player.draw(self.screen, self.camera_x, self.camera_y, self)
 
         # 2️⃣ Overlay a semi-transparent dark box to highlight the menu
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)

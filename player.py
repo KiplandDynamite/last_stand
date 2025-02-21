@@ -3,6 +3,7 @@ import math
 import random
 from bullet import Bullet
 from abilities import ABILITY_LIST
+from swordattack import SwordAttack
 
 BORDER_THICKNESS = 10  # Matches the visual border thickness
 
@@ -25,6 +26,7 @@ class Player:
         self.base_speed = 5
         self.speed = self.base_speed
 
+        self.sword_attack = SwordAttack(self)
 
         self.move_speed_bonus = 0
 
@@ -41,6 +43,10 @@ class Player:
 
         self.ricochet_count = 0
 
+        self.dash_active = False  # ✅ Track if dashing
+        self.dash_end_time = 0  # ✅ When the dash should end
+        self.dash_vector = pygame.Vector2(0, 0)  # ✅ Store dash direction
+
         # Hit effect tracking
         self.hit_timer = 0  # Time when player was last hit
         self.hit_effect_duration = 150  # Flash effect duration in milliseconds
@@ -54,6 +60,14 @@ class Player:
         if keys[pygame.K_s]: move_y += self.speed
         if keys[pygame.K_a]: move_x -= self.speed
         if keys[pygame.K_d]: move_x += self.speed
+
+        # ✅ If dashing, override movement
+        if self.dash_active:
+            self.rect.x += self.dash_vector.x
+            self.rect.y += self.dash_vector.y
+
+            if pygame.time.get_ticks() >= self.dash_end_time:
+                self.dash_active = False  # ✅ End dash after duration
 
         # Try moving in X first
         old_x = self.rect.x
@@ -72,6 +86,8 @@ class Player:
         self.rect.y = max(BORDER_THICKNESS, min(self.rect.y, self.MAP_HEIGHT - self.rect.height - BORDER_THICKNESS))
 
         current_time = pygame.time.get_ticks()
+
+        self.sword_attack.update(game.enemies, game)
 
         # ✅ Always apply Speed Boost permanently
         self.speed = self.base_speed * (1 + self.move_speed_bonus)
@@ -142,7 +158,7 @@ class Player:
         self.health -= 1
         self.hit_timer = pygame.time.get_ticks()  # Start hit effect timer
 
-    def draw(self, screen, camera_x, camera_y):
+    def draw(self, screen, camera_x, camera_y, game):
         """Draws the player with a bold black outline and a flashing hit effect when damaged."""
         current_time = pygame.time.get_ticks()
         time_since_hit = current_time - self.hit_timer
@@ -171,6 +187,8 @@ class Player:
         player_surface = pygame.Surface((self.rect.width, self.rect.height), pygame.SRCALPHA)
         player_surface.fill(player_color)
         screen.blit(player_surface, (self.rect.x - camera_x, self.rect.y - camera_y))
+
+        self.sword_attack.draw(screen, game)
 
     def gain_xp(self, amount, game):
         """Increase XP and check for level-up. Also triggers Adrenaline Rush on kill."""
@@ -257,21 +275,42 @@ class Player:
 
     def use_sword_attack(self, game):
         """Performs a melee slash if off cooldown."""
-        if "Sword Attack" in self.actions and pygame.time.get_ticks() >= self.cooldowns["sword_attack"]:
-            print("⚔️ Sword Slash!")
-            self.cooldowns["sword_attack"] = pygame.time.get_ticks() + 3000  # 3 sec cooldown
+        if "Sword Attack" in self.actions and self.sword_attack.can_attack():
+            print("⚔️ Sword Slash Initiated!")
+            self.sword_attack.start_attack()
 
     def unlock_dash(self):
         """Unlocks the dash ability."""
         if "Dash" not in self.abilities:
             self.abilities.append("Dash")
             print("💨 Dash Ability Unlocked!")
+            self.dash_active = False  # ✅ Track if dashing
+            self.dash_end_time = 0  # ✅ When the dash should end
+            self.dash_vector = pygame.Vector2(0, 0)  # ✅ Store dash direction
 
-    def use_dash(self, game):
-        """Allows the player to dash if off cooldown."""
-        if "Dash" in self.actions and pygame.time.get_ticks() >= self.cooldowns["dash"]:
+    def use_dash(self):
+        """Allows the player to dash in the current movement direction if off cooldown."""
+        current_time = pygame.time.get_ticks()
+
+        if "Dash" in self.abilities and not self.dash_active and current_time >= self.cooldowns["dash"]:
+            move_x, move_y = 0, 0
+            keys = pygame.key.get_pressed()
+
+            if keys[pygame.K_w]: move_y -= 1
+            if keys[pygame.K_s]: move_y += 1
+            if keys[pygame.K_a]: move_x -= 1
+            if keys[pygame.K_d]: move_x += 1
+
+            if move_x == 0 and move_y == 0:
+                return  # ⛔ Prevent dashing if not moving
+
             print("💨 Dashing!")
-            self.cooldowns["dash"] = pygame.time.get_ticks() + 5000  # 5 sec cooldown
+
+            # ✅ Normalize vector to maintain consistent speed across angles
+            self.dash_vector = pygame.Vector2(move_x, move_y).normalize() * 10  # 10 units per frame
+            self.dash_active = True
+            self.dash_end_time = current_time + 200  # Dash lasts 200ms
+            self.cooldowns["dash"] = current_time + 5000  # Set cooldown (5 sec)
 
     def force_level_up(self, game):
         """Dev command to instantly level up and pick an ability."""
