@@ -196,20 +196,14 @@ class Player:
         if self.xp >= self.xp_to_next_level:
             self.level_up(game)
 
-        # Debugging: Check if Adrenaline Rush is in abilities
-        print(f"📊 Current Abilities: {self.abilities}")
-
         if "Adrenaline Rush" in self.abilities:
             if not self.adrenaline_active:
                 self.adrenaline_active = True
                 self.adrenaline_end_time = pygame.time.get_ticks() + 5000  # ✅ Refresh 5s timer
-                print(f"🔥 Adrenaline Rush ACTIVATED! Speed Boost: +{int(self.adrenaline_boost * 100)}%")
 
                 # ✅ Stack Adrenaline Rush Effect
                 adrenaline_upgrades = self.abilities.count("Adrenaline Rush")  # Count how many times it was selected
                 self.adrenaline_boost = 0.2 * adrenaline_upgrades  # ✅ Increase boost per stack
-                print(
-                    f"🔥 Adrenaline Rush Stack Count: {adrenaline_upgrades}, New Boost: +{int(self.adrenaline_boost * 100)}%")
 
     def level_up(self, game):
         """Handles level-up logic and presents upgrade choices."""

@@ -25,40 +25,36 @@ class Obstacle:
             self.rect = pygame.Rect(self.x, self.y, self.width, self.width)
 
     def draw(self, screen, camera_x, camera_y):
-        """Draws the obstacle and a debug collision outline."""
+        """Draws the obstacle as a rectangular house with a center beam and a border."""
         draw_x = self.x - camera_x
         draw_y = self.y - camera_y
 
         if self.shape in ["square", "rectangle"]:
-            # Draw the filled rectangle
-            pygame.draw.rect(
-                screen,
-                (139, 69, 19),
-                pygame.Rect(draw_x, draw_y, self.width, self.height)
-            )
-            # Debug outline: exact same rectangle
-            pygame.draw.rect(
-                screen,
-                (102, 51, 0),
-                pygame.Rect(draw_x, draw_y, self.width, self.height),
-                10
-            )
+            # 🎨 **Color Definitions**
+            border_color = (102, 51, 0)  # Darker brown border
+            roof_color_left = (160, 82, 45)  # Lighter brown for left half
+            roof_color_right = (139, 69, 19)  # Darker brown for right half
+            beam_color = (100, 50, 30)  # Dark brown beam in the center
+
+            border_thickness = 4  # Thickness of the outline
+
+            # 🏠 **Draw the border (slightly larger than the building)**
+            pygame.draw.rect(screen, border_color,
+                             (draw_x - border_thickness, draw_y - border_thickness,
+                              self.width + border_thickness * 2, self.height + border_thickness * 2))
+
+            # 🏠 **Draw the full rectangular roof inside the border**
+            pygame.draw.rect(screen, roof_color_left, (draw_x, draw_y, self.width // 2, self.height))
+            pygame.draw.rect(screen, roof_color_right, (draw_x + self.width // 2, draw_y, self.width // 2, self.height))
+
+            # 🪵 **Draw the central beam**
+            pygame.draw.rect(screen, beam_color,
+                             (draw_x + self.width // 2 - 3, draw_y, 6, self.height))  # Thin vertical beam
+
         elif self.shape == "circle":
-            # Draw the filled circle
-            pygame.draw.circle(
-                screen,
-                (139, 69, 19),
-                (draw_x + self.width // 2, draw_y + self.width // 2),
-                self.radius
-            )
-            # Debug outline: draw a circle so it matches collision
-            pygame.draw.circle(
-                screen,
-                (255, 0, 0),
-                (draw_x + self.width // 2, draw_y + self.width // 2),
-                self.radius,
-                2
-            )
+            pygame.draw.circle(screen, (139, 69, 19),
+                               (draw_x + self.width // 2, draw_y + self.width // 2),
+                               self.radius)
 
     def collides(self, obj_rect):
         """Checks collision based on shape type."""

@@ -105,8 +105,10 @@ class Bullet:
 
                 enemies_hit.append(enemy)
 
-                # Deal damage
-                enemy_died = enemy.take_damage(self.damage)
+                if isinstance(enemy, Enemy):  # Ensure it's an actual enemy, not a Missile
+                    enemy_died = enemy.take_damage(self.damage)
+                else:
+                    enemy_died = False  # Ensure enemy_died is always defined
 
                 if self.explosive:
                     explosion_radius = 50
@@ -179,7 +181,7 @@ class Bullet:
         """Draws the bullet, changing color based on pierce level."""
         # Color changes based on pierce level
         if self.explosive:
-            color = (64,64,64)
+            color = (153,76,0)
         elif self.pierce == 0:
             color = (255, 255, 0)  # Yellow (default)
         elif self.pierce == 1:

@@ -1,5 +1,6 @@
 import pygame
 import math
+import time
 from shooterbullet import ShooterBullet
 
 ENEMY_SPEED = 2  # Base enemy speed
@@ -368,6 +369,46 @@ class ShooterEnemy(Enemy):
                                      self.rect.width, self.rect.height))
 
         self.draw_health_bar(screen, camera_x, camera_y, enemy_color)
+
+
+class EliteShooter(ShooterEnemy):
+    """ An upgraded Shooter enemy with more health and a two-shot spread attack. """
+
+    def __init__(self, x, y):
+        super().__init__(x, y)
+        self.health = 6  # More HP than regular Shooters
+        self.color = (100, 0, 150)  # Darker purple shade
+        self.fire_cooldown = 2000  # 2000ms (2 seconds) cooldown between shots
+        self.last_fired_time = 0  # Track last fire time
+
+    def fire(self, player, enemy_bullets):
+        """ Fires two bullets in a spread pattern at the player, but only if cooldown has passed. """
+        current_time = pygame.time.get_ticks()
+
+        # Check if enough time has passed since last shot
+        if current_time - self.last_fired_time < self.fire_cooldown:
+            return  # Too soon to fire again
+
+        self.last_fired_time = current_time  # Update last fired time
+
+        from shooterbullet import ShooterBullet  # Avoid circular import
+
+        angle_offset = math.radians(10)  # Spread angle
+        dx, dy = player.rect.centerx - self.rect.centerx, player.rect.centery - self.rect.centery
+        base_angle = math.atan2(dy, dx)
+
+        # Calculate target positions for each bullet
+        target_x1 = self.rect.centerx + math.cos(base_angle - angle_offset) * 1000
+        target_y1 = self.rect.centery + math.sin(base_angle - angle_offset) * 1000
+        target_x2 = self.rect.centerx + math.cos(base_angle + angle_offset) * 1000
+        target_y2 = self.rect.centery + math.sin(base_angle + angle_offset) * 1000
+
+        bullet1 = ShooterBullet(self.rect.centerx, self.rect.centery, target_x1, target_y1)
+        bullet2 = ShooterBullet(self.rect.centerx, self.rect.centery, target_x2, target_y2)
+
+        enemy_bullets.append(bullet1)
+        enemy_bullets.append(bullet2)
+
 
 class SwarmEnemy(Enemy):
     """A weak, fast-moving enemy that spawns in groups and maintains swarm behavior."""
